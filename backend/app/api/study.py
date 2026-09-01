@@ -273,31 +273,36 @@ async def upload_study_material(
     s3_key = f"documents/{study_id}/{file.filename}"
     asyncio.create_task(asyncio.to_thread(s3_storage.upload_file, file_path, s3_key, file.content_type))
 
-    # Stage 1: Fast-path text extraction (blocking, ~sub-second)
-    await doc_processor.ingest_document(
-        doc_id=study_id,
-        file_path=file_path,
-        file_name=file.filename,
-        subject=subject,
-        session_id=study_id,
+    # Run Stage 1 Ingestion (Chunking/Indexing) and Topic Extraction concurrently in PARALLEL
+    async def _safe_extract_topics():
+        try:
+            return await asyncio.wait_for(
+                topic_extractor.extract_topics(
+                    file_path=file_path,
+                    subject=subject,
+                    user_id="default_user",
+                ),
+                timeout=12.0,
+            )
+        except Exception as e:
+            print(f"[StudyAPI] Extraction timed out or error ({e}), providing fallback structure...")
+            return topic_extractor._heuristic_fallback(subject, Path(file.filename).stem)
+
+    # Execute both in parallel
+    _, extraction_result = await asyncio.gather(
+        doc_processor.ingest_document(
+            doc_id=study_id,
+            file_path=file_path,
+            file_name=file.filename,
+            subject=subject,
+            session_id=study_id,
+        ),
+        _safe_extract_topics(),
     )
 
     # Stage 2 & 3: Background Enrichment (async, non-blocking)
     asyncio.create_task(doc_processor.run_background_enrichment(study_id))
 
-    # Extract curriculum topics using Curriculum Reasoning Agent
-    try:
-        extraction_result = await asyncio.wait_for(
-            topic_extractor.extract_topics(
-                file_path=file_path,
-                subject=subject,
-                user_id="default_user",
-            ),
-            timeout=15.0,
-        )
-    except Exception as e:
-        print(f"[StudyAPI] Extraction timed out or error ({e}), providing fallback structure...")
-        extraction_result = topic_extractor._heuristic_fallback(subject, Path(file.filename).stem)
 
     # Cache active study session & persist to isolated session database
     topics = extraction_result.get("topics", [])

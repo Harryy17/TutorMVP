@@ -182,27 +182,39 @@ class DocumentProcessor:
                         # Page has no or negligible text -> Scanned page!
                         scanned_pages_to_vlm.append(page_idx)
 
-                # If scanned pages exist, use Gemini VLM to extract text from images
+                # If scanned pages exist, use Gemini VLM to extract text from images in PARALLEL
                 if scanned_pages_to_vlm:
-                    print(f"[DocProcessor] Scanned PDF detected ({len(scanned_pages_to_vlm)}/{total_pages} scanned pages). Running Gemini VLM OCR...")
-                    # In fast path, process up to the first 5 scanned pages immediately
-                    fast_scanned = scanned_pages_to_vlm[:5]
-                    for page_idx in fast_scanned:
-                        page_num = page_idx + 1
-                        page_img = self.vlm.render_pdf_page_to_image(file_path, page_idx=page_idx, dpi=150)
-                        if page_img:
-                            page_ocr_text = await self.vlm.extract_text_from_image(
-                                page_img, mime_type="image/png", context_hint=subject
+                    fast_scanned = scanned_pages_to_vlm[:6]
+                    print(f"[DocProcessor] Scanned PDF detected ({len(scanned_pages_to_vlm)}/{total_pages} scanned pages). Running PARALLEL Gemini VLM OCR on {len(fast_scanned)} pages...")
+
+                    async def _ocr_single_page(p_idx: int) -> List[DocumentChunk]:
+                        p_num = p_idx + 1
+                        try:
+                            p_img = await asyncio.to_thread(self.vlm.render_pdf_page_to_image, file_path, p_idx, 120)
+                            if not p_img:
+                                return []
+                            p_ocr_text = await self.vlm.extract_text_from_image(
+                                p_img, mime_type="image/png", context_hint=subject
                             )
-                            if page_ocr_text and page_ocr_text.strip():
-                                chunks = self._chunk_text(
-                                    page_ocr_text,
+                            if p_ocr_text and p_ocr_text.strip():
+                                p_chunks = self._chunk_text(
+                                    p_ocr_text,
                                     doc_id=doc_id,
-                                    page=page_num,
+                                    page=p_num,
                                     source_type="text"
                                 )
-                                text_chunks.extend(chunks)
-                                print(f"[DocProcessor] VLM transcribed scanned PDF Page {page_num} -> {len(chunks)} chunks.")
+                                print(f"[DocProcessor] VLM transcribed scanned PDF Page {p_num} -> {len(p_chunks)} chunks.")
+                                return p_chunks
+                        except Exception as ocr_err:
+                            print(f"[DocProcessor] Error on parallel page {p_num}: {ocr_err}")
+                        return []
+
+                    # Execute all pages concurrently in parallel
+                    page_results = await asyncio.gather(*[_ocr_single_page(p) for p in fast_scanned], return_exceptions=True)
+                    for res in page_results:
+                        if isinstance(res, list):
+                            text_chunks.extend(res)
+
 
                 doc.chunks.extend(text_chunks)
                 doc.stats["text_chunks"] = len(text_chunks)
