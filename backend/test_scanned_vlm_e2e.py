@@ -109,7 +109,7 @@ async def run_tests():
 
     assert len(topics_res.get('topics', [])) > 0, "No topics extracted from scanned PDF!"
 
-    print("\n🎉 ALL TESTS PASSED SUCCESSFULLY! Scanned PDFs & Images are fully digitized with VLM!")
+    print("\n[SUCCESS] ALL TESTS PASSED! Scanned PDFs & Images are fully digitized with VLM!")
 
 if __name__ == "__main__":
     asyncio.run(run_tests())

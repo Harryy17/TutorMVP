@@ -16,8 +16,14 @@ class Settings(BaseSettings):
 
     # Google Gemini Configuration (Primary for LLM & VLM)
     GEMINI_API_KEY: str = ""
-    GEMINI_MODEL: str = "gemini-2.5-flash"
+    GEMINI_MODEL: str = "gemini-3.5-flash-lite"
     GEMINI_BASE_URL: str = "https://generativelanguage.googleapis.com/v1beta"
+
+    # AWS S3 Cloud Storage
+    AWS_ACCESS_KEY_ID: str = ""
+    AWS_SECRET_ACCESS_KEY: str = ""
+    AWS_S3_BUCKET_NAME: str = "deeptutor-documents-storage"
+    AWS_REGION: str = "eu-north-1"
 
     # NVIDIA NIM API (optional fallback)
     NVIDIA_API_KEY: str = ""

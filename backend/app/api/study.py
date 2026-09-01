@@ -18,6 +18,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 from app.core.config import get_settings
+from app.core.s3_client import s3_storage
 from app.rag.topic_extractor import topic_extractor
 from app.rag.teaching_engine import teaching_engine
 from app.rag.exam_generator import exam_generator
@@ -267,6 +268,10 @@ async def upload_study_material(
     content = await file.read()
     with open(file_path, "wb") as f:
         f.write(content)
+
+    # Cloud Storage: Upload document to AWS S3 bucket in background
+    s3_key = f"documents/{study_id}/{file.filename}"
+    asyncio.create_task(asyncio.to_thread(s3_storage.upload_file, file_path, s3_key, file.content_type))
 
     # Stage 1: Fast-path text extraction (blocking, ~sub-second)
     await doc_processor.ingest_document(

@@ -1,49 +1,165 @@
-# Environments & Dependencies
-.venv/
+# =============================================================================
+# Indie Tutor — Comprehensive .gitignore
+# =============================================================================
+
+# ─── Environment & Secrets ───────────────────────────────────────────────────
+.env
+.env.*
+!.env.example
+!.env.template
+*.env
+*.pem
+*.key
+*.cert
+*.crt
+credentials.json
+client_secret*.json
+
+# ─── Python & Virtual Environments ───────────────────────────────────────────
 venv/
+.venv/
+env/
 ENV/
-node_modules/
-dist/
-dist-ssr/
-*.local
+env.bak/
+venv.bak/
+bin/
+include/
+lib/
+lib64/
 
-# Database & Generated Storage
-*.db
-*.sqlite
-*.sqlite3
-backend/chroma_data/
-backend/graph_data/
-backend/uploads/
-!backend/uploads/.gitkeep
-
-# Python Cache & Build
+# Python bytecode and caches
 __pycache__/
 *.py[cod]
 *$py.class
 *.so
 .Python
+*.egg-info/
+.installed.cfg
+*.egg
 build/
 develop-eggs/
+dist/
 downloads/
 eggs/
 .eggs/
-lib/
-lib64/
 parts/
 sdist/
 var/
 wheels/
-*.egg-info/
-.installed.cfg
-*.egg
+share/python-wheels/
+pip-wheel-metadata/
 
-# Logs & Environment Variables
+# Testing & Coverage
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+coverage.xml
+*.cover
+*.pyre/
+.mypy_cache/
+.ruff_cache/
+.dmypy.json
+dmypy.json
+
+# ─── Node.js / Vite / Frontend ──────────────────────────────────────────────
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# Build outputs
+dist/
+dist-ssr/
+build/
+out/
+.next/
+.nuxt/
+.vuepress/dist
+.temp/
+.cache/
+.parcel-cache/
+.turbo/
+.oxlint-cache
+.eslintcache
+
+# ─── Database, Storage & Uploads ────────────────────────────────────────────
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+*.sqlite
+*.sqlite3
+*.sqlite3-journal
+data/
+backend/data/
+chroma_data/
+backend/chroma_data/
+graph_data/
+backend/graph_data/
+uploads/
+backend/uploads/
+!backend/uploads/.gitkeep
+test_artifacts/
+backend/test_artifacts/
+sessions/
+backend/sessions/
+
+# ─── Logs & Temporary Files ─────────────────────────────────────────────────
+logs/
 *.log
-.env
-.env.local
+*.tmp
+*.temp
+*.bak
+*.swp
+*.swo
+*~
 
-# IDE & System
-.vscode/
+# ─── IDEs & Editors ──────────────────────────────────────────────────────────
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
 .idea/
+*.sublime-workspace
+*.sublime-project
+*.code-workspace
+.project
+.settings/
+
+# ─── Operating System Files ─────────────────────────────────────────────────
+# macOS
 .DS_Store
+.AppleDouble
+.LSOverride
+._*
+.DocumentRevisions-V100
+.fseventsd
+.Spotlight-V100
+.TemporaryItems
+.Trashes
+
+# Windows
 Thumbs.db
+Thumbs.db:encryptable
+ehthumbs.db
+ehthumbs_vista.db
+desktop.ini
+$RECYCLE.BIN/
+*.cab
+*.msi
+*.msm
+*.msp
+*.lnk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.trash

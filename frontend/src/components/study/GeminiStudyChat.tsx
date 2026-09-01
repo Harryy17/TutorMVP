@@ -87,7 +87,7 @@ export default function GeminiStudyChat({
   const [isUploading, setIsUploading] = useState(false)
   const [sessionId, setSessionId] = useState(activeSessionId || '')
   const [extractedTopics, setExtractedTopics] = useState<TopicItem[]>([])
-  const [isPlanMinimized, setIsPlanMinimized] = useState(false)
+  const [isPlanMinimized, setIsPlanMinimized] = useState(true)
   const [currentlySpeakingMsgId, setCurrentlySpeakingMsgId] = useState<string | null>(null)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -295,15 +295,25 @@ export default function GeminiStudyChat({
       setSessionId(newSessionId)
       if (onSessionChange) onSessionChange(newSessionId)
       setExtractedTopics(topics)
+
+      // Build clean list with topic names only
+      let topicsMarkdown = `### 📚 Extracted Important Topics for **${currentSubject}**\n\n`
+      topicsMarkdown += `Here are the core topics extracted from **${file.name}**:\n\n`
+      
+      topics.forEach((t, idx) => {
+        topicsMarkdown += `${idx + 1}. **${t.title}**\n`
+      })
+      topicsMarkdown += `\n💬 **You can now ask questions or clarify doubts directly!**`
+
       const updatedMessages = [
         ...messages,
         userMsg,
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `Curriculum analyzed for **${currentSubject}**. I have prioritized the **${topics.length} key foundational topics** and structured your interactive **Plan** on the right. You can select any topic to review, or click **Open Full Plan** to begin.`,
+          text: topicsMarkdown,
           isAnalyzing: false,
-          thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics, and arranged in prerequisite learning sequence.`,
+          thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics.`,
         }
       ]
       setMessages(updatedMessages)
@@ -321,18 +331,25 @@ export default function GeminiStudyChat({
       setSessionId(fallbackSessionId)
       if (onSessionChange) onSessionChange(fallbackSessionId)
       const fallbackTopics: TopicItem[] = [
-        { id: 'topic_1', title: 'Decision Trees & Random Forests', summary: 'Tree-based recursive partitioning, entropy, information gain, and ensemble bagging for variance reduction.', difficulty: 'Beginner', key_concepts: ['Information Gain', 'Gini Impurity', 'Bagging'], estimated_study_time: '12-15 mins' },
-        { id: 'topic_2', title: 'Support Vector Machines', summary: 'Maximum margin hyperplanes, soft margin optimization, and non-linear kernel transformations.', difficulty: 'Intermediate', key_concepts: ['Margin', 'Kernel Trick', 'Slack Variables'], estimated_study_time: '15-18 mins' },
-        { id: 'topic_3', title: 'Logistic & Linear Regression', summary: 'Parametric modeling, least squares cost function, sigmoid mapping, and gradient descent optimization.', difficulty: 'Beginner', key_concepts: ['Cost Function', 'Sigmoid', 'Gradient Descent'], estimated_study_time: '12-15 mins' },
+        { id: 'topic_1', title: 'Decision Trees & Random Forests', summary: 'Tree-based recursive partitioning.', difficulty: 'Beginner', key_concepts: [], estimated_study_time: '12-15 mins' },
+        { id: 'topic_2', title: 'Support Vector Machines', summary: 'Maximum margin hyperplanes.', difficulty: 'Intermediate', key_concepts: [], estimated_study_time: '15-18 mins' },
+        { id: 'topic_3', title: 'Logistic & Linear Regression', summary: 'Parametric modeling.', difficulty: 'Beginner', key_concepts: [], estimated_study_time: '12-15 mins' },
       ]
       setExtractedTopics(fallbackTopics)
+
+      let fallbackMarkdown = `### 📚 Extracted Important Topics for **${currentSubject}**\n\n`
+      fallbackTopics.forEach((t, idx) => {
+        fallbackMarkdown += `${idx + 1}. **${t.title}**\n`
+      })
+      fallbackMarkdown += `\n💬 **You can now ask questions or clarify doubts directly!**`
+
       const fallbackMsgs = [
         ...messages,
         userMsg,
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `Curriculum structured for **${currentSubject}**. Your **Plan** is available on the right. Select any topic to review or click **Open Full Plan** to view all topics.`,
+          text: fallbackMarkdown,
           isAnalyzing: false,
         }
       ]
