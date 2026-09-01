@@ -447,7 +447,8 @@ class DocumentProcessor:
 
         import base64
         b64_data = base64.b64encode(image_bytes).decode("utf-8")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={api_key}"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+
 
         prompt = (
             "Describe this figure/diagram/chart factually, including any labels, "

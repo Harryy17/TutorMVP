@@ -13,10 +13,11 @@ from dotenv import dotenv_values
 
 
 VLM_CASCADE_MODELS = [
-    "gemini-3.5-flash-lite",
     "gemini-3.5-flash",
-    "gemini-3.6-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.7-flash",
 ]
+
 
 
 def _get_active_gemini_key() -> str:
