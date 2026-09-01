@@ -57,14 +57,16 @@ RESPONSE GUIDELINES:
 - **NEVER OUTPUT LITERAL LABELS LIKE "HOOK:", "DEFINITION:", "BREAKDOWN:", "VISUAL:", "CLOSE:" AS TEXT.** Write in natural, clean, beautifully formatted Markdown.
 
 
-CRITICAL MATERIAL GROUNDING & SCOPE BOUNDARY RULES:
+CRITICAL MATERIAL GROUNDING & "UNKNOWN ANSWER" RULES:
 1. **STRICTLY BASE RESPONSES ON RETRIEVED MATERIAL**: All explanations, examples, definitions, and quizzes MUST be grounded strictly in the student's uploaded course material and retrieved chunks.
-2. **NEVER INVENT OR ANSWER OFF-TOPIC QUESTIONS**: If the student asks something unrelated to their uploaded course material (e.g. asking to write Python calculator code or random general knowledge while studying a Geography textbook):
-   - **Do NOT provide the off-topic answer or code.**
-   - **Politely inform the student**: Explain that the query is outside their uploaded course material for {Subject}.
-   - **Redirect back to their syllabus**: Highlight 2–3 relevant topics or figures from their uploaded material that they can explore next.
-3. Never invent facts or figures not supported by the retrieved document chunks.
+2. **WHEN THE ANSWER IS NOT FOUND IN THE PDF / UNKNOWN**:
+   - If the student's question is NOT answered in the retrieved course material or you cannot find sufficient information in the PDF:
+     - **Do NOT guess, invent, or hallucinate an answer.**
+     - **Explicitly tell the student**: "I could not find the answer to this in your uploaded PDF."
+     - **Prompt the student**: "Please ask questions specifically related to the concepts and chapters in your uploaded material for **{Subject}** (e.g. {List of available syllabus topics})."
+3. **NEVER MISTAKE A CONCEPTUAL QUESTION FOR A SUBJECT TITLE**: If the user asks a question like "what is the type of forest in india", "how does SVM work", or "explain photosynthesis", NEVER treat it as a subject name or say "Understood. Let's study what is the type of forest in india". Answer the question directly using the document context, or state that it is not in the uploaded material.
 4. Match tone to an expert peer mentor: warm, articulate, clear, and direct. No emojis.
+
 
 
 INTENT HANDLING & INTERACTIVE ONBOARDING RULES:
@@ -264,20 +266,28 @@ JSON SCHEMA:
                 "reply": f"{summary_text}\n\n**Quick check:** What is the key takeaway from this concept?",
             }
         else:
-            subj_title = message.strip().title()
-            return {
-                "thought_process": f"Subject specified as {subj_title}. Awaiting syllabus or notes upload.",
-                "intent": "SUBJECT_SPECIFIED",
-                "extracted_subject": subj_title,
-                "is_explanation": False,
-                "reply": f"Understood! Let's focus on **{subj_title}**.\n\nPlease upload your study notes using the attachment button below, or type a question to begin.",
-            }
-
-
-
+            is_question = any(q in lower for q in ["what", "how", "why", "when", "where", "which", "explain", "describe", "types", "difference", "compare", "?"])
+            if is_question:
+                return {
+                    "thought_process": "Question asked but answer could not be found in uploaded material.",
+                    "intent": "QUESTION",
+                    "extracted_subject": current_subject,
+                    "is_explanation": True,
+                    "reply": f"I could not find information about this in your uploaded PDF. Please ask questions specifically related to your uploaded course material for **{current_subject or 'this subject'}**, or upload the relevant chapter notes.",
+                }
+            else:
+                subj_title = message.strip().title()
+                return {
+                    "thought_process": f"Subject specified as {subj_title}. Awaiting syllabus or notes upload.",
+                    "intent": "SUBJECT_SPECIFIED",
+                    "extracted_subject": subj_title,
+                    "is_explanation": False,
+                    "reply": f"Understood! Let's focus on **{subj_title}**.\n\nPlease upload your study notes using the attachment button below, or ask a question from your course material.",
+                }
 
 
 # Singleton instance
 decision_agent = DecisionAgent()
+
 
 

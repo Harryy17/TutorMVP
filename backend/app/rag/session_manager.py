@@ -288,6 +288,11 @@ class SessionManager:
             "topics": topics,
         }
 
+    def get_session_state(self, session_id: str) -> Dict[str, Any]:
+        """Alias for load_session_state."""
+        return self.load_session_state(session_id)
+
 
 # Singleton instance
 session_manager = SessionManager()
+

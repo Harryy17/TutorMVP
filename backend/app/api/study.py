@@ -157,11 +157,26 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
     doc_status_note = ""
     user_id = body.user_id or "default_user"
 
-    if body.session_id and body.session_id in _study_sessions:
-        session = _study_sessions[body.session_id]
-        file_name = session.get("file_name")
+    if body.session_id:
+        if body.session_id in _study_sessions:
+            session = _study_sessions[body.session_id]
+            file_name = session.get("file_name")
+            if not body.current_subject:
+                body.current_subject = session.get("subject")
+        else:
+            saved_state = session_manager.get_session_state(body.session_id)
+            if saved_state and saved_state.get("meta"):
+                file_name = saved_state["meta"].get("file_name")
+                if not body.current_subject:
+                    body.current_subject = saved_state["meta"].get("subject")
+                _study_sessions[body.session_id] = {
+                    "id": body.session_id,
+                    "subject": saved_state["meta"].get("subject", "General"),
+                    "file_name": file_name,
+                    "title": saved_state["meta"].get("title"),
+                    "topics": saved_state.get("topics", []),
+                }
 
-        # If follow up like "yes" or short phrase, prepend previous user query
         effective_query = body.message
         if len(effective_query.strip()) <= 5 and body.history:
             for h in reversed(body.history):
@@ -176,6 +191,7 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
             top_k=6,
             session_id=body.session_id,
         )
+
 
 
     decision = await decision_agent.analyze_and_respond(
