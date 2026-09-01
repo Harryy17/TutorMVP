@@ -282,11 +282,13 @@ async def upload_study_material(
                     subject=subject,
                     user_id="default_user",
                 ),
-                timeout=12.0,
+                timeout=22.0,
             )
         except Exception as e:
-            print(f"[StudyAPI] Extraction timed out or error ({e}), providing fallback structure...")
-            return topic_extractor._heuristic_fallback(subject, Path(file.filename).stem)
+            print(f"[StudyAPI] Extraction note ({e}), extracting from document text...")
+            sample = topic_extractor._fast_extract_pdf_text(file_path, max_pages=20) if file_path.lower().endswith(".pdf") else ""
+            return topic_extractor._heuristic_fallback(subject, Path(file.filename).stem, sample)
+
 
     # Execute both in parallel
     _, extraction_result = await asyncio.gather(

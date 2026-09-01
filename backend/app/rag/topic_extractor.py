@@ -22,26 +22,26 @@ TOPIC_EXTRACTION_PROMPT = """You are an expert Academic Curriculum & Topic Reaso
 A student has uploaded course material for the subject: "{subject}".
 
 YOUR TASK:
-Think step-by-step through the document to extract the most IMPORTANT, high-yield topics that a student needs to master.
+Think step-by-step through the document to extract ALL IMPORTANT, high-yield topics and chapters that a student needs to master.
 
 THINKING & EXTRACTION PROCESS:
-1. Document Scope: Identify the core mathematical, scientific, or algorithmic concepts taught in this text.
-2. High-Yield Filtering: Discard introductory boilerplate, publisher notes, and generic titles (never use titles like "Introduction", "Overview", or "Chapter 1"). Focus on real, testable concepts (e.g. "Chords & Circle Segments", "Alternate Segment Theorem", "Support Vector Machines & Kernel Trick").
-3. Logical Sequencing: Arrange 4 to 6 topics in prerequisite order (Beginner -> Intermediate -> Advanced).
-4. Document your reasoning chain in "thought_process" explaining how you prioritized the core topics.
+1. Document Scope: Identify the core chapters, units, or modules taught in this text (especially reviewing the Table of Contents / Syllabus if provided).
+2. High-Yield Filtering: Discard introductory boilerplate, publisher notes, and generic titles (never use titles like "Introduction", "Overview", or "Chapter 1"). Focus on real, testable concepts (e.g. "Resources and Development", "Water Resources", "Agriculture").
+3. Comprehensive Coverage: Extract ALL major chapters or units (typically 6 to 12 topics) taught in this material so the complete syllabus is represented. Do NOT omit or compress important chapters.
+4. Document your reasoning chain in "thought_process" explaining how you extracted and sequenced every core chapter.
 
 Output strictly valid JSON with this exact schema:
 {{
-  "thought_process": "Brief 1-2 sentence explanation of how you analyzed the syllabus and selected the core foundational topics in prerequisite sequence.",
+  "thought_process": "Brief 1-2 sentence explanation of how you analyzed the syllabus/table of contents and selected every core chapter in prerequisite sequence.",
   "title": "{subject} Study Plan",
   "topics": [
     {{
       "id": "topic_1",
-      "title": "Specific, Concrete Topic Name (e.g. Chords & Circle Segments)",
+      "title": "Specific, Concrete Topic/Chapter Name",
       "summary": "Clear 1-2 sentence overview of core mechanics, formulation, and practical utility.",
       "difficulty": "Beginner" | "Intermediate" | "Advanced",
       "key_concepts": ["Concept 1", "Concept 2", "Key Formula / Law"],
-      "estimated_study_time": "12-15 mins"
+      "estimated_study_time": "15-20 mins"
     }}
   ]
 }}
@@ -61,19 +61,33 @@ class TopicExtractor:
         return ext in {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tiff", ".tif"}
 
     @staticmethod
-    def _fast_extract_pdf_text(file_path: str, max_pages: int = 20) -> str:
-        """Fast extraction of text from the first N pages of a PDF."""
-        text_parts = []
+    def _fast_extract_pdf_text(file_path: str, max_pages: int = 25) -> str:
+        """Fast extraction of text from PDF, automatically finding and prioritizing Table of Contents/Syllabus pages."""
+        toc_parts = []
+        regular_parts = []
         try:
             reader = pypdf.PdfReader(file_path)
             total = min(len(reader.pages), max_pages)
+
             for i in range(total):
                 page_text = reader.pages[i].extract_text() or ""
-                if page_text.strip():
-                    text_parts.append(f"--- Page {i+1} ---\n{page_text}")
+                if not page_text.strip():
+                    continue
+
+                lower_text = page_text.lower()
+                # Detect Table of Contents / Index / Syllabus / Curriculum pages
+                if any(kw in lower_text for kw in ["contents", "table of contents", "index", "syllabus", "course outline", "curriculum"]):
+                    toc_parts.append(f"--- TABLE OF CONTENTS / SYLLABUS (Page {i+1}) ---\n{page_text}")
+                else:
+                    regular_parts.append(f"--- Page {i+1} ---\n{page_text}")
+
         except Exception as e:
             print(f"[TopicExtractor] Fast PDF text error: {e}")
-        return "\n\n".join(text_parts)
+
+        # Table of Contents pages are placed FIRST to guarantee the LLM sees the complete syllabus
+        combined = toc_parts + regular_parts
+        return "\n\n".join(combined)
+
 
     async def extract_topics(
         self,
@@ -197,12 +211,40 @@ class TopicExtractor:
         """Intelligent curriculum fallback extracting actual document headings or subject-tailored topics."""
         lower_sub = subject.lower()
 
-        # Extract genuine chapter headings from text if available
+        # 1. Check for numbered Table of Contents chapters (e.g. "1. Resources and Development", "2. Forest...")
+        if text_sample:
+            toc_chapters = []
+            for line in text_sample.split("\n"):
+                m = re.match(r"^\s*([0-9]{1,2})\.\s+([A-Za-z0-9\s,&'\-]+?)(?:\s+[0-9ivx]+)?$", line.strip())
+                if m:
+                    ch_num, ch_title = m.group(1), m.group(2).strip()
+                    if 4 <= len(ch_title) <= 60 and not any(bad in ch_title.lower() for bad in ["appendix", "glossary", "reprint", "contents", "rationalisation", "foreword"]):
+                        if ch_title not in [c[1] for c in toc_chapters]:
+                            toc_chapters.append((ch_num, ch_title))
+
+            if len(toc_chapters) >= 3:
+                topics = []
+                diffs = ["Beginner", "Beginner", "Intermediate", "Intermediate", "Advanced", "Advanced"]
+                for i, (num, title) in enumerate(toc_chapters):
+                    topics.append({
+                        "id": f"topic_{i+1}",
+                        "title": title,
+                        "summary": f"Comprehensive study of {title}, foundational mechanisms, and key examination principles.",
+                        "difficulty": diffs[min(i, len(diffs)-1)],
+                        "key_concepts": [title, "Core Formulations", "Practical Applications"],
+                        "estimated_study_time": "15-20 mins"
+                    })
+                return {
+                    "thought_process": f"Extracted all {len(topics)} syllabus chapters directly from the document's table of contents.",
+                    "title": f"{subject} — Complete Study Plan",
+                    "topics": topics
+                }
+
+        # 2. Extract genuine chapter headings from text if available
         if text_sample and len(text_sample) > 100:
             extracted_headings = []
             lines = [l.strip() for l in text_sample.split("\n") if l.strip()]
             for line in lines:
-                # Look for section headers (e.g. "3.1 Water Scarcity", "Rainwater Harvesting", "Conservation Methods")
                 cleaned_line = re.sub(r"^[0-9.\-\s]+", "", line).strip()
                 if 8 <= len(cleaned_line) <= 60 and not cleaned_line.endswith(".") and not cleaned_line.endswith(":"):
                     if not any(bad in cleaned_line.lower() for bad in ["fig", "table", "page", "source", "ncert", "http"]):
@@ -213,20 +255,21 @@ class TopicExtractor:
             if len(extracted_headings) >= 3:
                 topics = []
                 diffs = ["Beginner", "Beginner", "Intermediate", "Intermediate", "Advanced", "Advanced"]
-                for i, heading in enumerate(extracted_headings[:5]):
+                for i, heading in enumerate(extracted_headings[:10]):
                     topics.append({
                         "id": f"topic_{i+1}",
                         "title": heading,
                         "summary": f"Key principles, governing mechanisms, and practical applications of {heading}.",
-                        "difficulty": diffs[i % len(diffs)],
+                        "difficulty": diffs[min(i, len(diffs)-1)],
                         "key_concepts": [heading, "Core Mechanisms", "Practical Applications"],
-                        "estimated_study_time": "12-15 mins"
+                        "estimated_study_time": "15-20 mins"
                     })
                 return {
-                    "thought_process": f"Identified {len(topics)} specific syllabus sections directly from document headings.",
+                    "thought_process": f"Identified all {len(topics)} syllabus sections directly from document headings.",
                     "title": f"{subject} — Study Plan",
                     "topics": topics
                 }
+
 
         # Subject-specific tailored fallbacks
         if "geo" in lower_sub or "water" in lower_sub or "earth" in lower_sub:
