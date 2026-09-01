@@ -55,7 +55,7 @@ app.add_middleware(
 app.include_router(study.router, prefix="/api")
 
 
-@app.get("/")
+@app.api_route("/", methods=["GET", "HEAD"])
 async def root():
     return {
         "name": "Indie Tutor — AI Study Room",
@@ -65,9 +65,10 @@ async def root():
     }
 
 
-@app.get("/api/health")
+@app.api_route("/api/health", methods=["GET", "HEAD"])
 async def health():
     return {
         "status": "ok",
         "service": "Indie Tutor Study Room",
     }
+
