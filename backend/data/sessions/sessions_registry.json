@@ -52,5 +52,23 @@
     "last_active": "2026-09-01T17:35:40.952673",
     "topics_count": 7,
     "messages_count": 10
+  },
+  "session_1788264688859": {
+    "session_id": "session_1788264688859",
+    "title": "General Study Study Plan",
+    "subject": "Machine Learning Algorithms",
+    "created_at": "2026-09-01T17:41:28.879442",
+    "last_active": "2026-09-01T17:43:36.284195",
+    "topics_count": 7,
+    "messages_count": 6
+  },
+  "session_1788265088509": {
+    "session_id": "session_1788265088509",
+    "title": "hi Study Session",
+    "subject": "Machine Learning",
+    "created_at": "2026-09-01T17:48:08.536101",
+    "last_active": "2026-09-01T17:48:19.363288",
+    "topics_count": 0,
+    "messages_count": 4
   }
 }

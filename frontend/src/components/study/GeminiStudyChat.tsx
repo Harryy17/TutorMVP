@@ -464,9 +464,12 @@ export default function GeminiStudyChat({
   }
 
 
-  // ─── SPLIT VIEW (Topics Extracted) ───────────────────────────── //
+  const assistantMsgCount = messages.filter((m) => m.role === 'assistant').length
+  const canUploadMaterial = extractedTopics.length > 0 || assistantMsgCount >= 2
 
+  // ─── SPLIT VIEW (Topics Extracted) ───────────────────────────── //
   if (step === 'topics_ready' || step === 'analyzing') {
+
     return (
       <div className="relative min-h-screen flex flex-col" style={{ background: 'var(--paper)' }}>
         <div className="flex flex-1 min-h-0" style={{ borderLeft: '4px solid var(--margin-red)' }}>
@@ -1212,16 +1215,42 @@ export default function GeminiStudyChat({
       {/* ── Fixed Input Bar (Single Column) ── */}
       {step === 'conversing' && (
         <div className="fixed bottom-5 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20">
+          {canUploadMaterial && extractedTopics.length === 0 && assistantMsgCount === 2 && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-2 flex items-center justify-between px-3.5 py-1.5 rounded-xl text-xs font-medium backdrop-blur-md shadow-2xs"
+              style={{
+                background: 'var(--sage-soft)',
+                border: '1px solid var(--sage)',
+                color: 'var(--sage)',
+              }}
+            >
+              <div className="flex items-center gap-1.5">
+                <Paperclip size={13} />
+                <span>Upload Unlocked: You can now attach your syllabus or textbook PDF below!</span>
+              </div>
+            </motion.div>
+          )}
+
           <ChatInputForm
             onSendMessage={(txt) => handleSendMessage(txt)}
             onUploadFile={(file, note) => handleMaterialUpload(file, note)}
             disabled={isAgentThinking || isUploading}
-            placeholder="Ask a question or upload course material..."
+            allowUpload={canUploadMaterial}
+            placeholder={
+              canUploadMaterial
+                ? 'Ask a question or attach course material PDF (📎)...'
+                : assistantMsgCount < 1
+                ? 'Type what you would like to study...'
+                : 'Answer the question above to continue (Step 2 of 2)...'
+            }
           />
         </div>
       )}
     </div>
   )
 }
+
 
 
