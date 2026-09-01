@@ -1,0 +1,29 @@
+{
+  "session_1788256930496": {
+    "session_id": "session_1788256930496",
+    "title": "Mathematics Study Plan",
+    "subject": "Mathematics",
+    "created_at": "2026-09-01T15:32:10.513347",
+    "last_active": "2026-09-01T15:41:50.063951",
+    "topics_count": 5,
+    "messages_count": 8
+  },
+  "session_1788257116138": {
+    "session_id": "session_1788257116138",
+    "title": "Machine Learning Study Plan",
+    "subject": "Machine Learning",
+    "created_at": "2026-09-01T15:35:16.161759",
+    "last_active": "2026-09-01T15:36:31.998970",
+    "topics_count": 5,
+    "messages_count": 12
+  },
+  "session_1788257201960": {
+    "session_id": "session_1788257201960",
+    "title": "Geography Study Plan",
+    "subject": "Geography",
+    "created_at": "2026-09-01T15:36:41.983461",
+    "last_active": "2026-09-01T15:37:49.041022",
+    "topics_count": 6,
+    "messages_count": 8
+  }
+}
