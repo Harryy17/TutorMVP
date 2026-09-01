@@ -11,6 +11,7 @@ export interface ChatInputFormProps {
   placeholder?: string
   autoFocus?: boolean
   className?: string
+  allowUpload?: boolean
 }
 
 export default function ChatInputForm({
@@ -20,7 +21,9 @@ export default function ChatInputForm({
   placeholder = 'Ask a question or upload course material...',
   autoFocus = false,
   className = '',
+  allowUpload = true,
 }: ChatInputFormProps) {
+
   const [inputVal, setInputVal] = useState('')
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [isFocused, setIsFocused] = useState(false)
@@ -180,29 +183,32 @@ export default function ChatInputForm({
         {/* Text Input Row */}
         <div className="flex items-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
           {/* File Attachment Button */}
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={disabled}
-            className="flex items-center justify-center p-2 rounded-xl text-xs transition-all cursor-pointer shrink-0"
-            style={{
-              color: attachedFile ? 'var(--sage, #6B8E6E)' : 'var(--ink-soft, #3B4266)',
-              background: attachedFile ? 'var(--sage-soft, #E4ECE2)' : 'transparent',
-            }}
-            onMouseEnter={(e) => {
-              e.currentTarget.style.background = 'var(--sage-soft, #E4ECE2)'
-              e.currentTarget.style.color = 'var(--sage, #6B8E6E)'
-            }}
-            onMouseLeave={(e) => {
-              if (!attachedFile) {
-                e.currentTarget.style.background = 'transparent'
-                e.currentTarget.style.color = 'var(--ink-soft, #3B4266)'
-              }
-            }}
-            title="Attach Syllabus or PDF notes"
-          >
-            <Paperclip size={17} />
-          </button>
+          {allowUpload && (
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={disabled}
+              className="flex items-center justify-center p-2 rounded-xl text-xs transition-all cursor-pointer shrink-0"
+              style={{
+                color: attachedFile ? 'var(--sage, #6B8E6E)' : 'var(--ink-soft, #3B4266)',
+                background: attachedFile ? 'var(--sage-soft, #E4ECE2)' : 'transparent',
+              }}
+              onMouseEnter={(e) => {
+                e.currentTarget.style.background = 'var(--sage-soft, #E4ECE2)'
+                e.currentTarget.style.color = 'var(--sage, #6B8E6E)'
+              }}
+              onMouseLeave={(e) => {
+                if (!attachedFile) {
+                  e.currentTarget.style.background = 'transparent'
+                  e.currentTarget.style.color = 'var(--ink-soft, #3B4266)'
+                }
+              }}
+              title="Attach Syllabus or PDF notes"
+            >
+              <Paperclip size={17} />
+            </button>
+          )}
+
 
           {/* Textarea Field */}
           <div className="flex-1 min-w-0">

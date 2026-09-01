@@ -275,7 +275,8 @@ class DocumentProcessor:
 
         doc.status = "processing_enrichment"
 
-        # ── Stage 1.5: Index remaining pages (> page 15) in background ──
+        # ── Stage 1.5: Index remaining pages (> page 15) in backgr
+        # ound ──
         try:
             reader = pypdf.PdfReader(doc.file_path)
             total_pages = len(reader.pages)

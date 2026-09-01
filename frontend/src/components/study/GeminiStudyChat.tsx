@@ -867,19 +867,20 @@ export default function GeminiStudyChat({
             <span style={{ display: 'block', fontStyle: 'italic', color: 'var(--margin-red)' }}>{userName}?</span>
           </h1>
           <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', maxWidth: '380px', marginBottom: '32px', lineHeight: 1.6 }}>
-            Enter a subject or upload your course PDF to get a structured study plan.
+            Type what subject, topic, or exam you want to study to start.
           </p>
 
 
           <div className="w-full max-w-xl mb-6">
             <ChatInputForm
               onSendMessage={(txt) => handleSendMessage(txt)}
-              onUploadFile={(file, note) => handleMaterialUpload(file, note)}
+              allowUpload={false}
               disabled={isAgentThinking || isUploading}
-              placeholder="e.g. Machine Learning, Linear Algebra, or upload syllabus PDF..."
+              placeholder="e.g. Machine Learning, Class 10 Geography, Physics..."
               autoFocus
             />
           </div>
+
 
 
           {/* Starter Chips */}
