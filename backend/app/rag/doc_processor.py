@@ -161,8 +161,9 @@ class DocumentProcessor:
                 text_chunks: List[DocumentChunk] = []
                 scanned_pages_to_vlm: List[int] = []
 
-                # Fast pass: check extractable digital text per page
-                for page_idx in range(total_pages):
+                # Fast pass: index initial high-yield pages immediately (<0.5s response)
+                fast_limit = min(total_pages, 15)
+                for page_idx in range(fast_limit):
                     page_num = page_idx + 1
                     try:
                         page_text = reader.pages[page_idx].extract_text() or ""
@@ -181,6 +182,7 @@ class DocumentProcessor:
                     else:
                         # Page has no or negligible text -> Scanned page!
                         scanned_pages_to_vlm.append(page_idx)
+
 
                 # If scanned pages exist, use Gemini VLM to extract text from images in PARALLEL
                 if scanned_pages_to_vlm:
@@ -273,35 +275,44 @@ class DocumentProcessor:
 
         doc.status = "processing_enrichment"
 
-        # ── Stage 1.5: OCR remaining scanned pages (> page 5) ──
+        # ── Stage 1.5: Index remaining pages (> page 15) in background ──
         try:
             reader = pypdf.PdfReader(doc.file_path)
             total_pages = len(reader.pages)
-            if total_pages > 5:
-                for page_idx in range(5, total_pages):
+            if total_pages > 15:
+                remaining_chunks = []
+                for page_idx in range(15, total_pages):
                     page_num = page_idx + 1
                     try:
                         p_text = reader.pages[page_idx].extract_text() or ""
                     except Exception:
                         p_text = ""
 
-                    if len(p_text.strip()) < 40:
-                        page_img = self.vlm.render_pdf_page_to_image(doc.file_path, page_idx=page_idx, dpi=150)
-                        if page_img:
+                    if len(p_text.strip()) >= 40:
+                        chunks = self._chunk_text(p_text, doc_id=doc_id, page=page_num, source_type="text")
+                        remaining_chunks.extend(chunks)
+                    elif page_idx < 30:
+                        p_img = await asyncio.to_thread(self.vlm.render_pdf_page_to_image, doc.file_path, page_idx, 120)
+                        if p_img:
                             ocr_text = await self.vlm.extract_text_from_image(
-                                page_img, mime_type="image/png", context_hint=doc.subject
+                                p_img, mime_type="image/png", context_hint=doc.subject
                             )
                             if ocr_text and ocr_text.strip():
                                 chunks = self._chunk_text(ocr_text, doc_id=doc_id, page=page_num, source_type="text")
-                                doc.chunks.extend(chunks)
-                                doc.stats["text_chunks"] += len(chunks)
-                                store = get_session_store(doc.session_id)
-                                store.index_chunks([
-                                    {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
-                                    for c in chunks
-                                ])
+                                remaining_chunks.extend(chunks)
+
+                if remaining_chunks:
+                    doc.chunks.extend(remaining_chunks)
+                    doc.stats["text_chunks"] += len(remaining_chunks)
+                    store = get_session_store(doc.session_id)
+                    store.index_chunks([
+                        {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
+                        for c in remaining_chunks
+                    ])
+                    print(f"[DocProcessor] Background enriched {len(remaining_chunks)} chunks for remaining pages.")
         except Exception as e:
-            print(f"[DocProcessor] Background scanned page OCR warning: {e}")
+            print(f"[DocProcessor] Background page indexing warning: {e}")
+
 
         # ── Stage 2: Table Extraction ──
         try:
