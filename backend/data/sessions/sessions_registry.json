@@ -25,5 +25,14 @@
     "last_active": "2026-09-01T15:37:49.041022",
     "topics_count": 6,
     "messages_count": 8
+  },
+  "session_1788259726029": {
+    "session_id": "session_1788259726029",
+    "title": "AWS S3 Verification Session",
+    "subject": "Cloud Testing",
+    "created_at": "2026-09-01T16:18:46.655832",
+    "last_active": "2026-09-01T16:18:46.685361",
+    "topics_count": 1,
+    "messages_count": 1
   }
 }

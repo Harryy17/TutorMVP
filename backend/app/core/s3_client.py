@@ -120,13 +120,61 @@ class S3StorageClient:
             print(f"[S3Storage] Failed to generate presigned URL: {e}")
             return None
 
-    def backup_database_or_file(self, local_path: str, s3_key_prefix: str = "data_backups") -> Optional[str]:
-        """Backs up a local SQLite DB or JSON registry file to S3."""
-        if not os.path.exists(local_path):
-            return None
-        file_name = Path(local_path).name
-        s3_key = f"{s3_key_prefix}/{file_name}"
-        return self.upload_file(local_path, s3_key)
+    def download_file(self, s3_key: str, local_path: str) -> bool:
+        """Downloads an object from S3 to a local file path."""
+        if not self.is_configured():
+            return False
+
+        client = self._get_client()
+        Path(local_path).parent.mkdir(parents=True, exist_ok=True)
+        try:
+            client.download_file(
+                Bucket=self.bucket_name,
+                Key=s3_key,
+                Filename=local_path,
+            )
+            return True
+        except Exception as e:
+            print(f"[S3Storage] Download error for {s3_key}: {e}")
+            return False
+
+    def restore_data_from_s3(self, local_data_dir: Path, s3_key_prefix: str = "data_backups") -> int:
+        """
+        Restores database files and metadata registries from S3 backup prefix
+        into the local data directory if missing locally.
+        """
+        if not self.is_configured():
+            return 0
+
+        client = self._get_client()
+        restored_count = 0
+        try:
+            paginator = client.get_paginator("list_objects_v2")
+            for page in paginator.paginate(Bucket=self.bucket_name, Prefix=s3_key_prefix):
+                for obj in page.get("Contents", []):
+                    key = obj["Key"]
+                    rel_name = key[len(s3_key_prefix):].lstrip("/")
+                    if not rel_name:
+                        continue
+
+                    # Target local path
+                    if rel_name.endswith(".db") and not rel_name.startswith("study_store"):
+                        target_path = local_data_dir / "sessions" / rel_name
+                    elif rel_name == "sessions_registry.json":
+                        target_path = local_data_dir / "sessions" / rel_name
+                    else:
+                        target_path = local_data_dir / rel_name
+
+                    if not target_path.exists():
+                        success = self.download_file(key, str(target_path))
+                        if success:
+                            restored_count += 1
+                            print(f"[S3Storage] Restored {key} -> {target_path}")
+
+        except Exception as e:
+            print(f"[S3Storage] Data restore error: {e}")
+
+        return restored_count
 
 
 # Global singleton instance

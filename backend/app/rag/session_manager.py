@@ -213,6 +213,16 @@ class SessionManager:
 
         self.update_session_meta(session_id, updates)
 
+        # Cloud Backup: Sync session DB & registry to AWS S3 in background thread
+        try:
+            import threading
+            from app.core.s3_client import s3_storage
+            if s3_storage.is_configured():
+                threading.Thread(target=s3_storage.upload_file, args=(str(db_path), f"data_backups/{session_id}.db"), daemon=True).start()
+                threading.Thread(target=s3_storage.upload_file, args=(str(INDEX_FILE), "data_backups/sessions_registry.json"), daemon=True).start()
+        except Exception:
+            pass
+
     def load_session_state(self, session_id: str) -> Dict[str, Any]:
         """Loads all saved messages, topics, and metadata from the session's SQLite database."""
         db_path = self.get_session_db_path(session_id)
