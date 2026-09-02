@@ -325,14 +325,20 @@ async def upload_study_material(
         _safe_extract_topics(),
     )
 
-    # Stage 2 & 3: Background Enrichment (async, non-blocking)
-    asyncio.create_task(doc_processor.run_background_enrichment(study_id))
-
-
-    # Cache active study session & persist to isolated session database
     is_study_material = extraction_result.get("is_study_material", True)
     detected_document_type = extraction_result.get("detected_document_type", "Study Material")
     validation_reason = extraction_result.get("validation_reason", "")
+
+    # Stage 2 & 3: Background Enrichment (async, non-blocking) only if valid study material
+    if is_study_material:
+        asyncio.create_task(doc_processor.run_background_enrichment(study_id))
+    else:
+        try:
+            from app.rag.sqlite_fts_store import get_session_store
+            store = get_session_store(study_id)
+            store.clear_all()
+        except Exception as e:
+            print(f"[StudyAPI] Non-study material cleanup note: {e}")
     topics = extraction_result.get("topics", [])
     extracted_subj = extraction_result.get("subject")
     
