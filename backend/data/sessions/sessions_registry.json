@@ -4,9 +4,9 @@
     "title": "Geography Study Plan",
     "subject": "Geography",
     "created_at": "2026-09-02T11:11:44.075687",
-    "last_active": "2026-09-02T11:15:21.419202",
+    "last_active": "2026-09-02T11:25:03.823525",
     "topics_count": 7,
-    "messages_count": 10
+    "messages_count": 12
   },
   "session_1788328113365": {
     "session_id": "session_1788328113365",
@@ -15,6 +15,15 @@
     "created_at": "2026-09-02T11:18:33.388546",
     "last_active": "2026-09-02T11:18:35.193988",
     "topics_count": 0,
+    "messages_count": 2
+  },
+  "session_7c83686b53": {
+    "session_id": "session_7c83686b53",
+    "title": "General Study Study Plan",
+    "subject": "General Study",
+    "created_at": "2026-09-02T11:23:44.325498",
+    "last_active": "2026-09-02T11:23:44.373533",
+    "topics_count": 4,
     "messages_count": 2
   }
 }

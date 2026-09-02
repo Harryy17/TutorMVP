@@ -76,13 +76,14 @@ export default function StudyPage() {
         onToggleMobile={setIsMobileSidebarOpen}
       />
 
-      <main className="relative z-10 flex-1 min-w-0 h-screen overflow-y-auto">
+      <main className="relative z-10 flex-1 min-w-0 h-screen overflow-hidden">
         <AnimatePresence mode="wait">
 
           {/* ── Page 1: Chat + Split Study Map Panel ─────────────── */}
           {activeView === 'chat' && (
             <motion.div
               key="chat"
+              className="h-full w-full"
               initial={{ opacity: 0, y: 15 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -15 }}

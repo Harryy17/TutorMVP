@@ -119,7 +119,14 @@ export default function GeminiStudyChat({
             setStep('topics_ready')
           }
           if (savedMsgs && savedMsgs.length > 0) {
-            setMessages(savedMsgs)
+            // Restore topics on curriculum message if missing from legacy records
+            const restoredMsgs = savedMsgs.map((m: Message) => {
+              if ((!m.topics || m.topics.length === 0) && savedTopics && savedTopics.length > 0 && (m.text.includes('Extracted Curriculum Roadmap') || m.text.includes('core learning modules'))) {
+                return { ...m, topics: savedTopics }
+              }
+              return m
+            })
+            setMessages(restoredMsgs)
             if (!savedTopics || savedTopics.length === 0) {
               setStep('conversing')
             }
@@ -468,10 +475,10 @@ export default function GeminiStudyChat({
 
   // ─── INITIAL WELCOME / CONVERSATION VIEW ─────────────────────── //
   return (
-    <div className="relative min-h-[90vh] flex flex-col justify-between max-w-4xl mx-auto px-4 sm:px-6 py-6 sm:py-10" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="relative h-full max-h-screen flex flex-col justify-between max-w-4xl mx-auto px-4 sm:px-6 py-4 overflow-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
       {/* ── Welcome Screen ── */}
       {step === 'ask_subject' && (
-        <div className="flex-1 flex flex-col items-center justify-center text-center">
+        <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center overflow-y-auto custom-scrollbar px-2 py-4">
           {/* Mobile Top Bar */}
           {onOpenMobileSidebar && (
             <div className="md:hidden w-full flex items-center justify-between pb-3 border-b border-[var(--paper-rule)] mb-6">
@@ -537,7 +544,7 @@ export default function GeminiStudyChat({
 
       {/* ── Active Conversation Screen (Before Materials) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className="flex-1 flex flex-col space-y-4 pb-28 overflow-y-auto pt-2 notebook-lines custom-scrollbar">
+        <div className="flex-1 min-h-0 flex flex-col space-y-4 pb-28 overflow-y-auto pt-2 notebook-lines custom-scrollbar will-change-scroll">
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b-2 border-[var(--paper-rule)]">
             <div className="flex items-center gap-2 min-w-0">

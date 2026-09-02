@@ -68,10 +68,21 @@ class SessionManager:
                 text TEXT,
                 thought_process TEXT,
                 quiz_data_json TEXT,
+                topics_json TEXT,
+                attachment_json TEXT,
                 is_explanation INTEGER DEFAULT 0,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
         """)
+        # Backward-compatible column migration
+        try:
+            cursor.execute("ALTER TABLE session_messages ADD COLUMN topics_json TEXT")
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE session_messages ADD COLUMN attachment_json TEXT")
+        except Exception:
+            pass
         cursor.execute("""
             CREATE TABLE IF NOT EXISTS session_topics (
                 id TEXT PRIMARY KEY,
@@ -177,8 +188,8 @@ class SessionManager:
             for m in messages:
                 cursor.execute(
                     """
-                    INSERT INTO session_messages (id, role, text, thought_process, quiz_data_json, is_explanation)
-                    VALUES (?, ?, ?, ?, ?, ?)
+                    INSERT INTO session_messages (id, role, text, thought_process, quiz_data_json, topics_json, attachment_json, is_explanation)
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
                     """,
                     (
                         m.get("id", ""),
@@ -186,6 +197,8 @@ class SessionManager:
                         m.get("text", ""),
                         m.get("thoughtProcess", ""),
                         json.dumps(m.get("quizData")) if m.get("quizData") else None,
+                        json.dumps(m.get("topics")) if m.get("topics") else None,
+                        json.dumps(m.get("attachment")) if m.get("attachment") else None,
                         1 if m.get("isExplanation") else 0,
                     ),
                 )
@@ -250,6 +263,16 @@ class SessionManager:
         conn.row_factory = sqlite3.Row
         cursor = conn.cursor()
 
+        # Ensure columns exist in case of older db files
+        try:
+            cursor.execute("ALTER TABLE session_messages ADD COLUMN topics_json TEXT")
+        except Exception:
+            pass
+        try:
+            cursor.execute("ALTER TABLE session_messages ADD COLUMN attachment_json TEXT")
+        except Exception:
+            pass
+
         # Load messages
         cursor.execute("SELECT * FROM session_messages ORDER BY rowid ASC")
         rows = cursor.fetchall()
@@ -262,12 +285,28 @@ class SessionManager:
                 except Exception:
                     pass
 
+            topics_data = None
+            try:
+                if "topics_json" in r.keys() and r["topics_json"]:
+                    topics_data = json.loads(r["topics_json"])
+            except Exception:
+                pass
+
+            attachment_data = None
+            try:
+                if "attachment_json" in r.keys() and r["attachment_json"]:
+                    attachment_data = json.loads(r["attachment_json"])
+            except Exception:
+                pass
+
             messages.append({
                 "id": r["id"],
                 "role": r["role"],
                 "text": r["text"],
                 "thoughtProcess": r["thought_process"],
                 "quizData": quiz_data,
+                "topics": topics_data,
+                "attachment": attachment_data,
                 "isExplanation": bool(r["is_explanation"]),
             })
 

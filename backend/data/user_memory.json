@@ -5,11 +5,14 @@
     "learning_style": "Step-by-step with clear examples",
     "active_goals": [
       "Master academic coursework",
-      "Build strong conceptual foundations"
+      "Build strong conceptual foundations",
+      "Wants to know important exam topics"
     ],
     "studied_topics": [],
     "weaknesses": [],
-    "facts": [],
+    "facts": [
+      "Preparing for an upcoming exam"
+    ],
     "last_active": "2026-09-02T05:36:57.732518"
   },
   "default_user": {
