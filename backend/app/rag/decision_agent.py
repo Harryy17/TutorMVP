@@ -137,7 +137,7 @@ Respond with ONLY this JSON object:
 }
 """
 
-    def __init__(self, max_retries: int = 2, enable_self_critique: bool = True):
+    def __init__(self, max_retries: int = 1, enable_self_critique: bool = False):
         self.max_retries = max_retries
         self.enable_self_critique = enable_self_critique
 

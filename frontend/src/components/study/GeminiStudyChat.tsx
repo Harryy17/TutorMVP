@@ -312,7 +312,7 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic or start Teacher Mode below:`,
+          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic below:`,
           isAnalyzing: false,
           topics: topics,
           thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics.`,
@@ -345,7 +345,7 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have extracted **${fallbackTopics.length} core learning modules**. You can explore any topic or start Teacher Mode below:`,
+          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have extracted **${fallbackTopics.length} core learning modules**. You can explore any topic below:`,
           isAnalyzing: false,
           topics: fallbackTopics,
         }
@@ -733,7 +733,7 @@ export default function GeminiStudyChat({
                     {/* Roadmap Header Badge */}
                     <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl border border-[var(--paper-rule)] bg-[var(--paper)]">
                       <div className="flex items-center gap-2 min-w-0">
-                        <div className="w-6 h-6 rounded-lg bg-[var(--ink)] flex items-center justify-center text-[var(--highlight)] shrink-0 font-bold text-xs">
+                        <div className="w-6 h-6 rounded-lg bg-[var(--sage-soft)] flex items-center justify-center text-[var(--sage)] shrink-0 font-bold text-xs border border-[var(--sage)]">
                           <BookOpen size={13} />
                         </div>
                         <div className="truncate">
@@ -790,9 +790,9 @@ export default function GeminiStudyChat({
                               <button
                                 type="button"
                                 onClick={() => handleSelectMode(t, 'normal')}
-                                className="w-full sm:w-2/3 max-w-sm flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-[var(--ink)] text-[var(--paper)] hover:bg-slate-800 shadow-2xs active:scale-[0.98]"
+                                className="w-full sm:w-2/3 max-w-sm flex items-center justify-center gap-1.5 py-2 px-4 rounded-xl text-xs font-semibold cursor-pointer transition-all bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:text-[var(--sage)] hover:border-[var(--sage)] border border-[var(--paper-rule)] shadow-2xs active:scale-[0.98]"
                               >
-                                <Brain size={12} />
+                                <Brain size={13} />
                                 <span>Explore Core Idea</span>
                               </button>
                             </div>

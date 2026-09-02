@@ -372,7 +372,7 @@ class DocumentProcessor:
         return "\n".join(md_lines)
 
     # ─── IMAGE EXTRACTION & VLM CAPTIONING HELPER ─────────────────────────
-    async def _extract_and_caption_images(self, file_path: str, doc_id: str, max_images: int = 15) -> List[DocumentChunk]:
+    async def _extract_and_caption_images(self, file_path: str, doc_id: str, max_images: int = 8) -> List[DocumentChunk]:
         """Extracts images from PDF pages and runs Gemini VLM factual captioning with PyMuPDF."""
         image_chunks: List[DocumentChunk] = []
 
@@ -403,6 +403,7 @@ class DocumentProcessor:
                         page_fig_context = "; ".join(fig_matches[:3]) if fig_matches else ""
 
                         caption = await self._caption_image_with_vlm(image_bytes, mime_type=f"image/{image_ext}", context_hint=page_fig_context)
+                        await asyncio.sleep(0.2)  # Yield loop to allow user chat requests priority
 
                         content_parts = [f"Figure / Diagram on Page {page_num + 1}"]
                         if page_fig_context:

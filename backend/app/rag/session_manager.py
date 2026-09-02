@@ -120,12 +120,23 @@ class SessionManager:
         return registry.get(session_id)
 
     def update_session_meta(self, session_id: str, updates: Dict[str, Any]):
-        """Updates metadata such as title, subject, or counts."""
+        """Updates metadata such as title, subject, or counts, creating entry if not present."""
         registry = self._read_registry()
-        if session_id in registry:
-            registry[session_id].update(updates)
-            registry[session_id]["last_active"] = datetime.now().isoformat()
-            self._write_registry(registry)
+        if session_id not in registry:
+            clean_sub = updates.get("subject") or "General Study"
+            clean_title = updates.get("title") or f"{clean_sub} Study Session"
+            registry[session_id] = {
+                "session_id": session_id,
+                "title": clean_title,
+                "subject": clean_sub,
+                "created_at": datetime.now().isoformat(),
+                "last_active": datetime.now().isoformat(),
+                "topics_count": 0,
+                "messages_count": 0,
+            }
+        registry[session_id].update(updates)
+        registry[session_id]["last_active"] = datetime.now().isoformat()
+        self._write_registry(registry)
 
     def delete_session(self, session_id: str) -> bool:
         """Permanently deletes a session, its metadata, and its physical SQLite DB file."""
