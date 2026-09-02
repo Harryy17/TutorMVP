@@ -328,11 +328,14 @@ async def upload_study_material(
 
 
     # Cache active study session & persist to isolated session database
+    is_study_material = extraction_result.get("is_study_material", True)
+    detected_document_type = extraction_result.get("detected_document_type", "Study Material")
+    validation_reason = extraction_result.get("validation_reason", "")
     topics = extraction_result.get("topics", [])
     extracted_subj = extraction_result.get("subject")
     
     # Infer clean subject and title from material
-    if extracted_subj and extracted_subj.lower() not in {"general", "general study", "general subject"}:
+    if extracted_subj and extracted_subj.lower() not in {"general", "general study", "general subject", "non-study material"}:
         clean_subject = extracted_subj
     elif subject and subject.lower() not in {"general", "general study", "general subject"}:
         clean_subject = subject
@@ -349,6 +352,9 @@ async def upload_study_material(
         "file_path": file_path,
         "topics": topics,
         "title": session_title,
+        "is_study_material": is_study_material,
+        "detected_document_type": detected_document_type,
+        "validation_reason": validation_reason,
         "thought_process": extraction_result.get("thought_process"),
     }
     _study_sessions[study_id] = session_payload
@@ -368,6 +374,9 @@ async def upload_study_material(
         "file_name": file.filename,
         "title": session_payload["title"],
         "topics": topics,
+        "is_study_material": is_study_material,
+        "detected_document_type": detected_document_type,
+        "validation_reason": validation_reason,
         "thought_process": session_payload["thought_process"],
     }
 

@@ -331,11 +331,39 @@ export default function GeminiStudyChat({
 
     try {
       const res = await studyApi.upload(currentSubject, file, sessionId || undefined)
+      const isStudyMaterial = res.data?.is_study_material !== false
       const topics: TopicItem[] = res.data?.topics || []
       const newSessionId = res.data?.study_id || sessionId || `session_${Date.now()}`
       const thoughtProcess = res.data?.thought_process
       setSessionId(newSessionId)
       if (onSessionChange) onSessionChange(newSessionId)
+
+      // ── Non-Study Material Validation Guardrail ──
+      if (!isStudyMaterial) {
+        const detectedType = res.data?.detected_document_type || 'Non-Educational Document'
+        const reason = res.data?.validation_reason || 'This document does not appear to contain academic course concepts or syllabus materials.'
+
+        const rejectionMsg = {
+          id: analyzingId,
+          role: 'assistant' as const,
+          text: `### 📄 Non-Academic Material Detected\n\nI analyzed **${file.name}** and classified it as **${detectedType}**.\n\n> **Academic Guardrail Notice:**\n> ${reason}\n\n**Recommended Next Steps:**\n- 📘 Upload a textbook chapter, lecture slides, syllabus, or notes (`+` button).\n- 💬 Or type any topic or question directly below to begin learning!`,
+          isAnalyzing: false,
+          thoughtProcess: thoughtProcess || `Document classification identified ${detectedType}. Rejection guardrail triggered.`,
+        }
+
+        const updatedMessages = [...messages, userMsg, rejectionMsg]
+        setMessages(updatedMessages)
+        setStep('conversing')
+
+        studyApi.saveSessionState(newSessionId, {
+          messages: updatedMessages,
+          topics: [],
+          subject: currentSubject,
+          title: res.data?.title,
+        }).catch(() => { })
+        return
+      }
+
       setExtractedTopics(topics)
 
       const updatedMessages = [

@@ -18,19 +18,34 @@ from app.rag.vlm_client import vlm_client
 
 settings = get_settings()
 
-TOPIC_EXTRACTION_PROMPT = """You are an expert Academic Curriculum & Topic Reasoning Agent.
-Analyze the uploaded document content to identify the exact academic subject/course and extract all core learning modules.
+TOPIC_EXTRACTION_PROMPT = """You are an expert Academic Curriculum & Document Validation Agent.
+Analyze the uploaded document content.
 
-THINKING & EXTRACTION PROCESS:
-1. Document Scope: Detect the precise Course/Subject name (e.g. "Mathematics", "Machine Learning", "Geography", "Big Data Analytics") and Document Title (e.g. "Arithmetic Sequences & Progressions", "Introduction to Big Data", "Contemporary Geography").
-2. High-Yield Filtering: Discard introductory boilerplate, publisher notes, and generic titles (never use titles like "Introduction", "Overview", or "Chapter 1"). Focus on real, testable concepts (e.g. "Arithmetic Sequences", "HDFS & MapReduce", "Agriculture & Cropping Seasons").
-3. Comprehensive Coverage: Extract ALL major chapters or units (typically 4 to 10 topics) taught in this material.
+STEP 1: Academic Relevance & Validation Check
+Determine if this document is legitimate academic or educational study material:
+- Valid study materials: Textbook chapters, syllabus documents, lecture notes or presentation slides, research papers, exam papers, practice worksheets, study guides, technical tutorials, educational diagrams.
+- Non-study materials: Invoices, receipts, tax documents, bank statements, restaurant menus, personal photos/selfies, marketing flyers, random personal chat logs, raw system logs.
+
+Set "is_study_material" to:
+- true if the content contains educational or course concepts.
+- false if the content is non-academic or personal/financial paperwork.
+
+STEP 2: Extraction (if is_study_material is true):
+1. Detect precise Subject name (e.g. 'Mathematics', 'Machine Learning', 'Geography') and Document Title.
+2. Extract all major chapters or units (4 to 10 topics) with testable concepts.
+
+STEP 3: Rejection Details (if is_study_material is false):
+1. State the detected document type (e.g. 'Financial Receipt / Invoice', 'Utility Bill', 'Non-Educational Document').
+2. Provide a polite, constructive validation reason explaining what kind of document was detected and what educational files the user should upload instead.
 
 Output strictly valid JSON with this exact schema:
 {{
-  "thought_process": "Brief 1-2 sentence explanation of how you analyzed the syllabus and selected every core chapter.",
-  "subject": "Precise Subject/Domain Name (e.g. 'Mathematics', 'Big Data', 'Geography', 'Machine Learning')",
-  "title": "Exact Course or Book Title (e.g. 'Arithmetic Sequences', 'Big Data Analytics', 'Contemporary Geography')",
+  "is_study_material": true | false,
+  "detected_document_type": "Textbook Chapter" | "Lecture Slides" | "Financial Receipt / Invoice" | "Personal Document" | "Other Non-Educational File",
+  "validation_reason": "Clear 1-2 sentence academic explanation",
+  "thought_process": "Brief 1-2 sentence reasoning",
+  "subject": "Precise Subject/Domain Name",
+  "title": "Exact Course or Document Title",
   "topics": [
     {{
       "id": "topic_1",
@@ -223,7 +238,21 @@ class TopicExtractor:
                 cleaned = cleaned[start_idx : end_idx + 1]
 
             data = json.loads(cleaned.strip())
+
+            # Check if classified as non-study material
+            if data.get("is_study_material") is False:
+                return {
+                    "is_study_material": False,
+                    "detected_document_type": data.get("detected_document_type") or "Non-Educational Document",
+                    "validation_reason": data.get("validation_reason") or "This document does not appear to contain academic curriculum or course study material.",
+                    "subject": "Non-Study Material",
+                    "title": "Non-Study Material",
+                    "topics": [],
+                    "thought_process": data.get("thought_process") or "Document validation identified non-academic content."
+                }
+
             if "topics" in data and len(data["topics"]) > 0:
+                data["is_study_material"] = True
                 for i, t in enumerate(data["topics"]):
                     if "id" not in t or not t["id"]:
                         t["id"] = f"topic_{i+1}"
@@ -235,6 +264,20 @@ class TopicExtractor:
     def _heuristic_fallback(self, subject: str, file_stem: str, text_sample: str = "") -> Dict[str, Any]:
         """Intelligent curriculum fallback extracting actual document headings or subject-tailored topics."""
         lower_sub = subject.lower()
+        lower_sample = (text_sample or "").lower()
+
+        # Heuristic check for non-academic invoice / receipt / log files
+        invoice_keywords = ["invoice", "receipt", "total amount due", "billing address", "order summary", "shipping method", "tax invoice"]
+        if any(k in lower_sample for k in invoice_keywords) and not any(k in lower_sample for k in ["chapter", "syllabus", "theorem", "equation", "definition", "exercise", "homework"]):
+            return {
+                "is_study_material": False,
+                "detected_document_type": "Financial Receipt / Invoice",
+                "validation_reason": "This document appears to be a financial receipt or invoice rather than educational study material. Please upload a textbook chapter, syllabus, or lecture slides.",
+                "subject": "Non-Study Material",
+                "title": "Non-Study Material",
+                "topics": [],
+                "thought_process": "Heuristic validation detected financial transaction keywords."
+            }
 
         # 1. Check for numbered Table of Contents chapters (e.g. "1. Resources and Development", "2. Forest...")
         if text_sample:
