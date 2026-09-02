@@ -238,22 +238,7 @@ export default function SessionSidebar({
           })}
         </div>
 
-        {/* ── Bottom Database Isolation Badge ── */}
-        <div className="p-2.5 border-t border-[var(--paper-rule)] bg-[var(--paper)]">
-          {!collapsed ? (
-            <div className="flex items-center gap-2 px-2 py-1.5 rounded-lg bg-[var(--sage-soft)] border border-[var(--paper-rule)] text-[10px] text-[var(--ink-soft)]">
-              <Sparkles className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-              <div className="truncate">
-                <span className="font-semibold text-[var(--ink)]">Isolated DBs</span>
-                <p className="truncate text-[9px] opacity-80">1 SQLite per subject</p>
-              </div>
-            </div>
-          ) : (
-            <div className="flex justify-center" title="Isolated Databases: 100% Zero-Bleed">
-              <Sparkles className="w-4 h-4 text-emerald-600" />
-            </div>
-          )}
-        </div>
+
       </div>
     )
   }
