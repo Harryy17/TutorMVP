@@ -143,6 +143,24 @@ body {
 }
 .markdown-content ul, .markdown-content ol { padding-left: 1.4rem; margin: 0.5em 0; }
 .markdown-content li { margin: 0.25em 0; }
+/* ─── Formula & Math Equation Callout Box ──────────────────────── */
+.markdown-content .katex-display {
+  background: #FFFFFF;
+  border: 1px solid #E5E7EB;
+  border-left: 3.5px solid #000000;
+  border-radius: 8px;
+  padding: 0.85rem 1.25rem;
+  margin: 1em 0;
+  overflow-x: auto;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
+  text-align: center;
+}
+
+.markdown-content .katex {
+  font-size: 1.05em;
+  color: #000000;
+}
+
 .markdown-content blockquote {
   border-left: 3px solid #3B82F6;
   padding: 0.6rem 1rem;

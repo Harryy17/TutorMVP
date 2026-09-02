@@ -52,5 +52,14 @@
     "last_active": "2026-09-02T12:38:34.257005",
     "topics_count": 7,
     "messages_count": 6
+  },
+  "session_1788333344409": {
+    "session_id": "session_1788333344409",
+    "title": "General Study Study Plan",
+    "subject": "why softmax is using , there a re lot of activation function is there , why this is used?",
+    "created_at": "2026-09-02T12:45:44.429710",
+    "last_active": "2026-09-02T12:46:44.994322",
+    "topics_count": 5,
+    "messages_count": 6
   }
 }
