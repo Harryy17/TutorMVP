@@ -117,7 +117,8 @@ class TopicExtractor:
 
         # Case 2: PDF or Text Document
         text_sample = ""
-        if path.suffix.lower() == ".pdf":
+        ext = path.suffix.lower()
+        if ext == ".pdf":
             text_sample = self._fast_extract_pdf_text(file_path, max_pages=20)
 
             # If PDF has virtually no extractable digital text, it's a scanned PDF -> use VLM
@@ -130,6 +131,33 @@ class TopicExtractor:
                     )
                     if vlm_topics and "topics" in vlm_topics and len(vlm_topics["topics"]) > 0:
                         return vlm_topics
+        elif ext in {".docx", ".doc"}:
+            try:
+                import docx
+                doc_file = docx.Document(file_path)
+                parts = [p.text.strip() for p in doc_file.paragraphs if p.text.strip()]
+                for tbl in doc_file.tables:
+                    for row in tbl.rows:
+                        row_t = " | ".join([c.text.strip() for c in row.cells if c.text.strip()])
+                        if row_t:
+                            parts.append(row_t)
+                text_sample = "\n\n".join(parts)
+            except Exception as e:
+                print(f"[TopicExtractor] DOCX read error: {e}")
+                text_sample = ""
+        elif ext in {".pptx", ".ppt"}:
+            try:
+                from pptx import Presentation
+                prs = Presentation(file_path)
+                slide_texts = []
+                for s in prs.slides:
+                    for shape in s.shapes:
+                        if hasattr(shape, "text") and shape.text.strip():
+                            slide_texts.append(shape.text.strip())
+                text_sample = "\n\n".join(slide_texts)
+            except Exception as e:
+                print(f"[TopicExtractor] PPTX read error: {e}")
+                text_sample = ""
         else:
             try:
                 with open(file_path, "r", encoding="utf-8", errors="ignore") as f:

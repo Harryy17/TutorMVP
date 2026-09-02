@@ -19,24 +19,11 @@ export function cleanAcademicText(raw: string): string {
   // 3. Clean repetitive numbered header artifacts (e.g., "1. The Big Picture", "## 1. Introduction")
   text = text.replace(/^(?:[0-9]+\.\s*(?:The Big Picture|Core Principle|Key Takeaways|Common Pitfall|Introduction|Simple Explanation|Deep Mechanics)[^\n]*\n?)+/gim, '')
 
-  // 4. Convert raw LaTeX fractions, hats, and sums into clean readable math
-  text = text.replace(/\\hat\{?([a-zA-Z])\}?/g, '$1̂') // \hat{y} -> ŷ
-  text = text.replace(/\\text\{([^\}]+)\}/g, '$1') // \text{MSE} -> MSE
-  text = text.replace(/\\frac\{1\}\{n\}\s*\\sum\s*\(([^)]+)\)\^2/g, '(1/n) · Σ($1)²') // \frac{1}{n} \sum (y - \hat{y})^2
-  text = text.replace(/\\frac\{1\}\{1\s*\+\s*e\^\{?-z\}?\}/g, '1 / (1 + e⁻ᶻ)') // Sigmoid fraction
-  text = text.replace(/\\frac\{([^}]+)\}\{([^}]+)\}/g, '($1 / $2)') // Generic fraction
-  text = text.replace(/\\sigma/g, 'σ') // \sigma -> σ
-  text = text.replace(/\\sum/g, 'Σ') // \sum -> Σ
-  text = text.replace(/e\^\{?-z\}?/g, 'e⁻ᶻ') // e^{-z} -> e⁻ᶻ
-  text = text.replace(/e\^\{?([^}]+)\}?/g, 'e^($1)')
-  text = text.replace(/\\cdot/g, '·')
-  text = text.replace(/\\le/g, '≤')
-  text = text.replace(/\\ge/g, '≥')
-  text = text.replace(/\\neq/g, '≠')
-  text = text.replace(/\\approx/g, '≈')
+  // 4. Clean and fix corrupted LaTeX escapes
+  text = text.replace(/\\le\s*ft\b/g, '\\left')
+  text = text.replace(/\\righ\s*t\b/g, '\\right')
+  text = text.replace(/\\sq\s*rt\b/g, '\\sqrt')
 
-  // Remove leftover raw dollar signs
-  text = text.replace(/\$([^\$\n]+)\$/g, '$1')
   // 4b. Strip all page numbers, page citations, and raw source tags like [Source: text | Page: 27]
   text = text.replace(/\[Source:[^\]]*\]/gi, '')
   text = text.replace(/(?:^|\n)\s*Based on (?:your )?uploaded material:\s*/gi, '\n\n')

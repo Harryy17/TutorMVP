@@ -233,6 +233,80 @@ class DocumentProcessor:
                 print(f"[DocProcessor] Fast path text extraction error: {e}")
                 doc.status = "text_ready"
 
+        # 4. Word documents (.docx, .doc)
+        elif ext in {".docx", ".doc"}:
+            try:
+                import docx
+                doc_file = docx.Document(file_path)
+                full_paragraphs = []
+                for p in doc_file.paragraphs:
+                    txt = p.text.strip()
+                    if txt:
+                        full_paragraphs.append(txt)
+                
+                # Also extract tables inside docx
+                for tbl in doc_file.tables:
+                    for row in tbl.rows:
+                        row_text = " | ".join([cell.text.strip() for cell in row.cells if cell.text.strip()])
+                        if row_text:
+                            full_paragraphs.append(row_text)
+
+                full_text = "\n\n".join(full_paragraphs)
+                if not full_text.strip():
+                    raise ValueError(f"No readable text extracted from {file_name}")
+
+                chunks = self._chunk_text(full_text, doc_id=doc_id, page=1, source_type="text")
+                doc.chunks.extend(chunks)
+                doc.stats["text_chunks"] = len(chunks)
+                doc.status = "fully_processed"
+                store = get_session_store(session_id)
+                store.index_chunks([
+                    {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
+                    for c in chunks
+                ])
+                print(f"[DocProcessor] Word doc ingestion completed: {len(chunks)} text chunks indexed for {file_name}.")
+                return doc
+            except Exception as e:
+                print(f"[DocProcessor] DOCX extraction error: {e}")
+                doc.status = "error"
+                doc.error_message = str(e)
+                return doc
+
+        # 5. PowerPoint presentations (.pptx, .ppt)
+        elif ext in {".pptx", ".ppt"}:
+            try:
+                from pptx import Presentation
+                prs = Presentation(file_path)
+                slide_chunks = []
+                for slide_idx, slide in enumerate(prs.slides):
+                    slide_texts = []
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text") and shape.text.strip():
+                            slide_texts.append(shape.text.strip())
+                    if slide_texts:
+                        slide_content = "\n".join(slide_texts)
+                        chunks = self._chunk_text(slide_content, doc_id=doc_id, page=slide_idx + 1, source_type="text")
+                        slide_chunks.extend(chunks)
+
+                if not slide_chunks:
+                    raise ValueError(f"No readable text found in presentation {file_name}")
+
+                doc.chunks.extend(slide_chunks)
+                doc.stats["text_chunks"] = len(slide_chunks)
+                doc.status = "fully_processed"
+                store = get_session_store(session_id)
+                store.index_chunks([
+                    {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
+                    for c in slide_chunks
+                ])
+                print(f"[DocProcessor] PPTX ingestion completed: {len(slide_chunks)} chunks indexed for {file_name}.")
+                return doc
+            except Exception as e:
+                print(f"[DocProcessor] PPTX extraction error: {e}")
+                doc.status = "error"
+                doc.error_message = str(e)
+                return doc
+
         return doc
 
     def get_document_text(self, doc_id: str, max_chars: int = 12000) -> str:

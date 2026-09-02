@@ -11,6 +11,8 @@ import {
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import type { TopicItem } from './TopicCards'
 import StudyMapPanel from './StudyMapPanel'
 import ChatInputForm from './ChatInputForm'
@@ -194,7 +196,13 @@ export default function GeminiStudyChat({
         user_id: userName.toLowerCase().replace(/\s+/g, '_') || 'default_user',
         user_name: userName,
         difficulty: options?.difficulty || 'standard',
-        history: messages.map((m) => ({ role: m.role, content: m.text })),
+        history: messages.map((m) => {
+          let content = m.text
+          if (m.quizData && m.quizData.question_text) {
+            content += `\n[Quiz Question ${m.quizData.question_number} of ${m.quizData.total_questions}: ${m.quizData.question_text}]`
+          }
+          return { role: m.role, content }
+        }),
       })
       const decision = res.data
 
@@ -218,7 +226,7 @@ export default function GeminiStudyChat({
           messages: allMsgs,
           topics: extractedTopics,
           subject: newSubject || subject || text,
-        }).catch(() => {})
+        }).catch(() => { })
       }
     } catch {
       const isQuestion = /\b(what|how|why|when|where|which|explain|describe|types|difference|compare|important|concepts)\b|\?/i.test(text)
@@ -241,7 +249,7 @@ export default function GeminiStudyChat({
           messages: allMsgs,
           topics: extractedTopics,
           subject: subject || text,
-        }).catch(() => {})
+        }).catch(() => { })
       }
     } finally {
       setIsAgentThinking(false)
@@ -278,7 +286,7 @@ export default function GeminiStudyChat({
         concept: subject,
         subject,
       })
-    } catch {}
+    } catch { }
     handleSendMessage('Please explain this in a simpler way with everyday analogies.', { difficulty: 'easier' })
   }
 
@@ -319,7 +327,7 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic below:`,
+          text: `###  Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic below:`,
           isAnalyzing: false,
           topics: topics,
           thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics.`,
@@ -333,7 +341,7 @@ export default function GeminiStudyChat({
         topics: topics,
         subject: currentSubject,
         title: res.data?.title,
-      }).catch(() => {})
+      }).catch(() => { })
 
     } catch {
       const fallbackSessionId = sessionId || `session_${Date.now()}`
@@ -352,7 +360,7 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have extracted **${fallbackTopics.length} core learning modules**. You can explore any topic below:`,
+          text: `### Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have extracted **${fallbackTopics.length} core learning modules**. You can explore any topic below:`,
           isAnalyzing: false,
           topics: fallbackTopics,
         }
@@ -364,7 +372,7 @@ export default function GeminiStudyChat({
         messages: fallbackMsgs,
         topics: fallbackTopics,
         subject: currentSubject,
-      }).catch(() => {})
+      }).catch(() => { })
     } finally {
       setIsUploading(false)
     }
@@ -585,7 +593,7 @@ export default function GeminiStudyChat({
               <div
                 className={m.role === 'assistant' ? `relative overflow-hidden transition-all duration-300 ${currentlySpeakingMsgId === m.id ? 'ring-1.5 ring-[var(--sage)]' : ''}` : ''}
                 style={m.role === 'user'
-                ? {
+                  ? {
                     background: 'var(--white)',
                     border: '1.5px solid var(--paper-rule)',
                     borderRadius: '14px 14px 4px 14px',
@@ -594,7 +602,7 @@ export default function GeminiStudyChat({
                     boxShadow: '0 2px 8px rgba(27,35,64,0.04)',
                     color: 'var(--ink)',
                   }
-                : {
+                  : {
                     background: currentlySpeakingMsgId === m.id ? 'linear-gradient(180deg, #F2F8F4 0%, var(--white) 100%)' : 'var(--white)',
                     border: currentlySpeakingMsgId === m.id ? '1px solid var(--sage)' : '1px solid var(--paper-rule)',
                     borderRadius: '4px 14px 14px 14px',
@@ -603,7 +611,7 @@ export default function GeminiStudyChat({
                     borderLeft: currentlySpeakingMsgId === m.id ? '4px solid var(--sage)' : '3px solid var(--highlight)',
                     boxShadow: currentlySpeakingMsgId === m.id ? '0 4px 20px rgba(74, 124, 89, 0.12)' : '0 2px 8px rgba(27,35,64,0.02)',
                   }
-              }>
+                }>
                 {/* Animated moving audio light beam when reading */}
                 {m.role === 'assistant' && currentlySpeakingMsgId === m.id && (
                   <motion.div
@@ -649,7 +657,7 @@ export default function GeminiStudyChat({
 
                 {getDisplayChatText(m) && (
                   <div className={m.role === 'user' ? 'text-[14px] leading-relaxed text-[#1B2340]' : 'markdown-content'}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{getDisplayChatText(m)}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{getDisplayChatText(m)}</ReactMarkdown>
                   </div>
                 )}
 
