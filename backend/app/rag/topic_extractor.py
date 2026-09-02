@@ -18,31 +18,80 @@ from app.rag.vlm_client import vlm_client
 
 settings = get_settings()
 
-TOPIC_EXTRACTION_PROMPT = """You are an expert Academic Curriculum & Document Validation Agent.
+CONTENT_RELEVANCE_CLASSIFIER_PROMPT = """You are a strict content-relevance classifier for an academic RAG ingestion pipeline.
+Your only job is to decide whether a document chunk is genuine STUDY MATERIAL suitable for
+an AI tutor to teach from, or something else that should be rejected before ingestion.
+
+Think through these signals before deciding:
+1. STRUCTURE: Does it have definitions, headings/sections, numbered concepts, formulas,
+   worked examples, exercises/questions, figure/table captions, or citations? (study-material signal)
+2. REGISTER: Is the language explanatory/technical, or promotional, personal, narrative,
+   transactional, or conversational?
+3. PURPOSE: Was this text written to TEACH a concept, or to sell something, record a
+   transaction, tell a story, document a personal exchange, or report news/events?
+4. Borderline check: general-knowledge writing (e.g. an encyclopedia-style article or a
+   how-to guide) is NOT study material unless it is clearly structured as course content
+   (syllabus, textbook chapter, lecture notes, academic paper, question bank).
+
+Classify into EXACTLY ONE category:
+- "STUDY_MATERIAL": textbook chapters, lecture notes/slides, syllabi, academic papers,
+  question banks/previous year papers, structured course notes.
+- "REFERENCE_NONACADEMIC": general wiki-style articles, product manuals, how-to guides,
+  news/journalism — informative but not coursework.
+- "PERSONAL": letters, chat/message logs, journals/diaries, resumes/CVs.
+- "COMMERCIAL": ads, marketing copy, invoices, receipts, contracts, terms & conditions.
+- "CREATIVE": fiction, poetry, scripts, song lyrics.
+- "OTHER": anything that doesn't clearly fit the above (garbled text, boilerplate, code
+  dumps with no pedagogical framing, spam, etc.)
+
+CRITICAL RULES:
+- If the document mixes genuine academic content with unrelated material (e.g. a textbook
+  page with an ad banner scraped in), classify by the DOMINANT content, not the noise.
+- Do not classify something as STUDY_MATERIAL just because it "could theoretically be
+  studied" — a news article about a scientific discovery is REFERENCE_NONACADEMIC, not
+  STUDY_MATERIAL, unless it is presented as structured course content.
+- Confidence must reflect genuine uncertainty. Use below 0.6 only when the chunk is short,
+  ambiguous, or structurally mixed.
+
+Respond with ONLY this JSON object, no preamble, no markdown fences:
+{{
+  "reasoning": "1-2 sentence justification citing which structural/register/purpose signals drove the decision",
+  "category": "STUDY_MATERIAL" | "REFERENCE_NONACADEMIC" | "PERSONAL" | "COMMERCIAL" | "CREATIVE" | "OTHER",
+  "confidence": 0.0,
+  "is_study_material": true | false
+}}
+
+DOCUMENT CONTENT:
+{text_sample}
+"""
+
+TOPIC_EXTRACTION_PROMPT = """You are an expert Academic Curriculum & Document Validation Agent for an AI tutor pipeline.
 Analyze the uploaded document content.
 
-STEP 1: Academic Relevance & Validation Check
-Determine if this document is legitimate academic or educational study material:
-- Valid study materials: Textbook chapters, syllabus documents, lecture notes or presentation slides, research papers, exam papers, practice worksheets, study guides, technical tutorials, educational diagrams.
-- Non-study materials: Invoices, receipts, tax documents, bank statements, restaurant menus, personal photos/selfies, marketing flyers, random personal chat logs, raw system logs.
+STEP 1: Content Relevance Classification
+Classify the document into one of the 6 standardized categories:
+- "STUDY_MATERIAL": textbook chapters, lecture notes/slides, syllabi, academic papers, question banks, course problem sets. (is_study_material: true)
+- "REFERENCE_NONACADEMIC": wiki articles, manuals, how-to guides, news articles. (is_study_material: false)
+- "PERSONAL": resumes/CVs, personal letters, chat logs, journals. (is_study_material: false)
+- "COMMERCIAL": invoices, receipts, advertisements, contracts, terms of service. (is_study_material: false)
+- "CREATIVE": fiction stories, poetry, scripts, lyrics. (is_study_material: false)
+- "OTHER": raw code dumps without pedagogical framing, spam, logs, garbled scans. (is_study_material: false)
 
-Set "is_study_material" to:
-- true if the content contains educational or course concepts.
-- false if the content is non-academic or personal/financial paperwork.
+STEP 2: Extraction (ONLY if category is "STUDY_MATERIAL"):
+1. Subject & Title: Detect the exact Course/Subject name (e.g. 'Mathematics', 'Machine Learning', 'Geography') and Document Title.
+2. Topics: Extract ALL core chapters or major units (4 to 10 topics) with testable key concepts and time estimates.
 
-STEP 2: Extraction (if is_study_material is true):
-1. Detect precise Subject name (e.g. 'Mathematics', 'Machine Learning', 'Geography') and Document Title.
-2. Extract all major chapters or units (4 to 10 topics) with testable concepts.
-
-STEP 3: Rejection Details (if is_study_material is false):
-1. State the detected document type (e.g. 'Financial Receipt / Invoice', 'Utility Bill', 'Non-Educational Document').
-2. Provide a polite, constructive validation reason explaining what kind of document was detected and what educational files the user should upload instead.
+STEP 3: Rejection Details (if category is NOT "STUDY_MATERIAL"):
+1. Set "is_study_material": false.
+2. Provide a polite, constructive validation reason explaining why this category is not structured academic coursework.
 
 Output strictly valid JSON with this exact schema:
 {{
   "is_study_material": true | false,
-  "detected_document_type": "Textbook Chapter" | "Lecture Slides" | "Financial Receipt / Invoice" | "Personal Document" | "Other Non-Educational File",
-  "validation_reason": "Clear 1-2 sentence academic explanation",
+  "category": "STUDY_MATERIAL" | "REFERENCE_NONACADEMIC" | "PERSONAL" | "COMMERCIAL" | "CREATIVE" | "OTHER",
+  "confidence": 0.95,
+  "detected_document_type": "Resume / CV" | "Financial Receipt / Invoice" | "Textbook Chapter" | "Lecture Slides" | "General Reference" | "Commercial Document",
+  "validation_reason": "1-2 sentence explanation citing structural/register signals",
   "thought_process": "Brief 1-2 sentence reasoning",
   "subject": "Precise Subject/Domain Name",
   "title": "Exact Course or Document Title",
@@ -100,6 +149,52 @@ class TopicExtractor:
         combined = toc_parts + regular_parts
         return "\n\n".join(combined)
 
+
+    @staticmethod
+    def precheck_study_material(text_sample: str, file_name: str) -> Optional[Dict[str, Any]]:
+        """Instant heuristic guardrail for Resumes, CVs, Invoices, Receipts, and non-academic personal files."""
+        lower_name = file_name.lower()
+        lower_txt = (text_sample or "").lower()
+
+        # 1. Resume / CV / Bio-data Detection
+        resume_name_patterns = ["resume", "curriculum vitae", " cv.", "_cv", "-cv", "cv_", "biodata", "bio-data"]
+        is_resume_name = any(r in lower_name for r in resume_name_patterns)
+
+        resume_body_keywords = [
+            "work experience", "experience", "education", "skills", "projects",
+            "certifications", "contact:", "github.com", "linkedin.com", "technical skills",
+            "career objective", "summary of qualifications", "achievements", "employment history"
+        ]
+        body_matches = sum(1 for k in resume_body_keywords if k in lower_txt)
+
+        academic_positive_signals = ["chapter", "syllabus", "textbook", "theorem", "equation", "proof", "exercise", "homework", "lecture notes"]
+        has_academic_signals = any(a in lower_txt for a in academic_positive_signals)
+
+        if is_resume_name or (body_matches >= 3 and not has_academic_signals):
+            return {
+                "is_study_material": False,
+                "detected_document_type": "Resume / Curriculum Vitae (CV)",
+                "validation_reason": "This file is a personal Resume/CV rather than academic course study material. Please upload a textbook chapter, syllabus, lecture notes, or problem set.",
+                "subject": "Non-Study Material",
+                "title": "Resume / CV",
+                "topics": [],
+                "thought_process": "Pre-validation guardrail classified document as personal Resume / CV."
+            }
+
+        # 2. Invoices / Receipts / Bills
+        invoice_keywords = ["invoice", "receipt", "total amount due", "billing address", "order summary", "tax invoice", "subtotal", "payment method", "amount payable"]
+        if any(k in lower_name for k in ["invoice", "receipt", "bill"]) or sum(1 for k in invoice_keywords if k in lower_txt) >= 2:
+            return {
+                "is_study_material": False,
+                "detected_document_type": "Financial Receipt / Invoice",
+                "validation_reason": "This document is a financial invoice or receipt rather than academic study material. Please upload course materials to begin learning.",
+                "subject": "Non-Study Material",
+                "title": "Financial Receipt / Invoice",
+                "topics": [],
+                "thought_process": "Pre-validation guardrail detected financial invoice/receipt keywords."
+            }
+
+        return None
 
     async def extract_topics(
         self,
@@ -177,6 +272,12 @@ class TopicExtractor:
             except Exception:
                 text_sample = ""
 
+        # Upfront Deterministic Guardrail Check (Instant validation for Resumes, Invoices, Receipts)
+        guardrail_result = self.precheck_study_material(text_sample, path.name)
+        if guardrail_result:
+            print(f"[TopicExtractor] Guardrail intercepted non-study material: {guardrail_result['detected_document_type']}")
+            return guardrail_result
+
         # If text sample is sufficiently rich, extract topics via Reasoning Agent
         if len(text_sample.strip()) > 80:
             truncated = text_sample[:10000]
@@ -195,8 +296,11 @@ class TopicExtractor:
                 )
 
                 data = self._parse_json_topics(response)
-                if data and "topics" in data and len(data["topics"]) > 0:
-                    return data
+                if data:
+                    if data.get("is_study_material") is False:
+                        return data
+                    if "topics" in data and len(data["topics"]) > 0:
+                        return data
             except Exception as e:
                 print(f"[TopicExtractor] Primary LLM error ({e}), trying Gemini cascade...")
 
@@ -215,8 +319,11 @@ class TopicExtractor:
                                 gem_data = resp.json()
                                 raw_txt = gem_data["candidates"][0]["content"]["parts"][0]["text"]
                                 data = self._parse_json_topics(raw_txt)
-                                if data and "topics" in data and len(data["topics"]) > 0:
-                                    return data
+                                if data:
+                                    if data.get("is_study_material") is False:
+                                        return data
+                                    if "topics" in data and len(data["topics"]) > 0:
+                                        return data
                     except Exception as e:
                         print(f"[TopicExtractor] Gemini cascade error on {model_name}: {e}")
                         continue
@@ -239,20 +346,34 @@ class TopicExtractor:
 
             data = json.loads(cleaned.strip())
 
+            category = data.get("category", "")
+            is_study = data.get("is_study_material")
+
             # Check if classified as non-study material
-            if data.get("is_study_material") is False:
+            if is_study is False or (category and category != "STUDY_MATERIAL"):
+                doc_type_map = {
+                    "PERSONAL": "Resume / CV / Personal Document",
+                    "COMMERCIAL": "Financial Receipt / Invoice / Contract",
+                    "REFERENCE_NONACADEMIC": "General Non-Academic Reference",
+                    "CREATIVE": "Creative Writing / Fiction",
+                    "OTHER": "Non-Educational Document"
+                }
+                detected_type = data.get("detected_document_type") or doc_type_map.get(category, "Non-Educational Document")
                 return {
                     "is_study_material": False,
-                    "detected_document_type": data.get("detected_document_type") or "Non-Educational Document",
-                    "validation_reason": data.get("validation_reason") or "This document does not appear to contain academic curriculum or course study material.",
+                    "category": category or "PERSONAL",
+                    "confidence": data.get("confidence", 0.95),
+                    "detected_document_type": detected_type,
+                    "validation_reason": data.get("validation_reason") or data.get("reasoning") or "This document is not structured academic coursework.",
                     "subject": "Non-Study Material",
                     "title": "Non-Study Material",
                     "topics": [],
-                    "thought_process": data.get("thought_process") or "Document validation identified non-academic content."
+                    "thought_process": data.get("thought_process") or data.get("reasoning") or "Content relevance classifier identified non-study content."
                 }
 
             if "topics" in data and len(data["topics"]) > 0:
                 data["is_study_material"] = True
+                data["category"] = "STUDY_MATERIAL"
                 for i, t in enumerate(data["topics"]):
                     if "id" not in t or not t["id"]:
                         t["id"] = f"topic_{i+1}"
@@ -263,6 +384,11 @@ class TopicExtractor:
 
     def _heuristic_fallback(self, subject: str, file_stem: str, text_sample: str = "") -> Dict[str, Any]:
         """Intelligent curriculum fallback extracting actual document headings or subject-tailored topics."""
+        # Upfront guardrail check
+        guardrail = self.precheck_study_material(text_sample, file_stem)
+        if guardrail:
+            return guardrail
+
         lower_sub = subject.lower()
         lower_sample = (text_sample or "").lower()
 
