@@ -78,6 +78,29 @@ body {
 }
 .msg-rise { animation: rise 0.25s ease both; }
 
+/* ─── AI Live Speech Reading Waves & Equalizer ────────────────── */
+@keyframes audio-pulse {
+  0%, 100% { height: 4px; opacity: 0.6; }
+  50% { height: 14px; opacity: 1; }
+}
+
+.equalizer-bar {
+  width: 2px;
+  background: #059669;
+  border-radius: 2px;
+  display: inline-block;
+  animation: audio-pulse 0.9s infinite ease-in-out;
+}
+
+.reading-active-bubble {
+  background: linear-gradient(180deg, rgba(5, 150, 105, 0.05) 0%, rgba(255, 255, 255, 0.95) 100%);
+  border-left: 3.5px solid #059669 !important;
+  box-shadow: 0 4px 20px rgba(5, 150, 105, 0.08);
+  border-radius: 0 14px 14px 0;
+  padding: 12px 18px !important;
+  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
 /* ─── Clean surfaces (flat modern software) ──────────────────── */
 .notebook-lines {
   background: var(--paper);

@@ -127,10 +127,10 @@ export default function ChatInputForm({
         onChange={handleFileChange}
       />
 
-      {/* Main Transparent Minimalist Pill Container */}
+      {/* Main Covered Pill Container */}
       <div
-        className={`relative transition-all duration-200 ease-out bg-transparent rounded-full border px-2 py-1.5 sm:px-3 sm:py-1.5 ${
-          isFocused ? 'border-slate-800 ring-1 ring-slate-800/10' : 'border-slate-300 hover:border-slate-400'
+        className={`relative transition-all duration-200 ease-out bg-white rounded-full border px-3 py-1.5 sm:px-3.5 sm:py-2 shadow-[0_4px_20px_rgba(0,0,0,0.07)] ${
+          isFocused ? 'border-slate-800 ring-2 ring-slate-800/10' : 'border-slate-200 hover:border-slate-300'
         }`}
       >
         {/* Attachment Pill (if file selected) */}
@@ -140,10 +140,10 @@ export default function ChatInputForm({
               initial={{ opacity: 0, y: -4, height: 0 }}
               animate={{ opacity: 1, y: 0, height: 'auto' }}
               exit={{ opacity: 0, y: -4, height: 0 }}
-              className="px-3 pt-1.5 pb-1"
+              className="px-2 pt-1 pb-1.5"
             >
               <div
-                className="flex items-center justify-between gap-2 px-3 py-1 rounded-full text-xs bg-slate-100/90 border border-slate-200 text-slate-700"
+                className="flex items-center justify-between gap-2 px-3 py-1 rounded-full text-xs bg-slate-100 border border-slate-200 text-slate-700"
               >
                 <div className="flex items-center gap-2 min-w-0">
                   <FileText size={13} className="shrink-0 text-blue-600" />
@@ -168,7 +168,7 @@ export default function ChatInputForm({
           )}
         </AnimatePresence>
 
-        {/* Text Input Row */}
+        {/* Text Input Row (Pixel-Perfect Centered) */}
         <div className="flex items-center gap-2">
           {/* Add / Attachment Button (+) */}
           {allowUpload && (
@@ -176,15 +176,15 @@ export default function ChatInputForm({
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
-              className="flex items-center justify-center w-8 h-8 rounded-full text-slate-600 hover:text-black hover:bg-black/5 transition-all cursor-pointer shrink-0"
+              className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-700 hover:text-black transition-colors cursor-pointer shrink-0"
               title="Attach Syllabus, PDF, Word or Notes"
             >
-              <Plus size={19} className="stroke-[2.2]" />
+              <Plus size={16} className="stroke-[2.5]" />
             </button>
           )}
 
           {/* Textarea Field */}
-          <div className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0 flex items-center">
             <textarea
               ref={textareaRef}
               rows={1}
@@ -195,29 +195,29 @@ export default function ChatInputForm({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={placeholder}
-              className="w-full resize-none bg-transparent text-sm leading-snug outline-none border-none py-1.5 px-1 font-serif text-black placeholder:text-slate-400 custom-scrollbar"
+              className="w-full resize-none bg-transparent text-[14px] sm:text-[15px] leading-normal outline-none border-none py-1 px-1 font-serif text-black placeholder:text-slate-400 placeholder:font-normal custom-scrollbar"
               style={{
-                minHeight: '24px',
+                minHeight: '22px',
                 maxHeight: '120px',
               }}
             />
           </div>
 
           {/* Right Action Control: Mic only (and Send when user enters text) */}
-          <div className="flex items-center gap-1 shrink-0 pr-1">
+          <div className="flex items-center shrink-0">
             {canSubmit ? (
               <motion.button
                 type="button"
                 onClick={handleSend}
                 disabled={disabled}
                 whileTap={{ scale: 0.92 }}
-                className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--ink)] hover:bg-slate-800 text-white shadow-xs transition-all cursor-pointer"
+                className="flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full bg-[var(--ink)] hover:bg-slate-800 text-white shadow-xs transition-all cursor-pointer"
                 title="Send message (Enter)"
               >
                 {disabled ? (
-                  <Loader2 size={14} className="animate-spin text-white" />
+                  <Loader2 size={13} className="animate-spin text-white" />
                 ) : (
-                  <Send size={14} className="ml-0.5" />
+                  <Send size={13} className="ml-0.5" />
                 )}
               </motion.button>
             ) : (
@@ -225,12 +225,12 @@ export default function ChatInputForm({
                 type="button"
                 onClick={handleVoiceToggle}
                 disabled={disabled}
-                className={`p-2 rounded-full text-slate-500 hover:text-black hover:bg-black/5 transition-all cursor-pointer ${
+                className={`flex items-center justify-center w-7 h-7 sm:w-8 sm:h-8 rounded-full text-slate-500 hover:text-black hover:bg-slate-100 transition-all cursor-pointer ${
                   isListening ? 'animate-pulse text-red-500 bg-red-50' : ''
                 }`}
                 title={isListening ? 'Listening... click to stop' : 'Voice dictation'}
               >
-                {isListening ? <MicOff size={17} /> : <Mic size={17} />}
+                {isListening ? <MicOff size={16} /> : <Mic size={16} />}
               </button>
             )}
           </div>

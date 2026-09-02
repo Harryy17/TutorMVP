@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   Send, Plus, FileText, X, Loader2, Mic, MicOff,
-  Sparkles, ArrowRight, BookOpen, Compass, Layers,
+  Sparkles, ArrowRight, ArrowDown, BookOpen, Compass, Layers,
   ChevronRight, ChevronDown, Paperclip, CheckCircle2,
   Menu, PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square,
   Clock, Brain, GraduationCap
@@ -94,10 +94,24 @@ export default function GeminiStudyChat({
   const [sessionId, setSessionId] = useState(activeSessionId || '')
   const [extractedTopics, setExtractedTopics] = useState<TopicItem[]>([])
   const [currentlySpeakingMsgId, setCurrentlySpeakingMsgId] = useState<string | null>(null)
-
+  const [spokenWordIndex, setSpokenWordIndex] = useState<number | null>(null)
+  const [speechWords, setSpeechWords] = useState<string[]>([])
+  const speechIntervalRef = useRef<any>(null)
+  const [showScrollBottom, setShowScrollBottom] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
+  const chatContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
+    const el = e.currentTarget
+    const isUp = el.scrollHeight - el.scrollTop - el.clientHeight > 140
+    setShowScrollBottom(isUp)
+  }
+
+  const scrollToBottom = () => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
 
   // ── Sync with activeSessionId from Left Navbar ──
   useEffect(() => {
@@ -420,12 +434,15 @@ export default function GeminiStudyChat({
 
     // If currently speaking this message, toggle off
     if (currentlySpeakingMsgId === msgId) {
+      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
       window.speechSynthesis.cancel()
       setCurrentlySpeakingMsgId(null)
+      setSpokenWordIndex(null)
       return
     }
 
     // Cancel any previous speech
+    if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
     window.speechSynthesis.cancel()
 
     // Clean text for natural speech synthesis
@@ -452,6 +469,10 @@ export default function GeminiStudyChat({
 
     if (!speechText) return
 
+    const words = speechText.split(/\s+/).filter(Boolean)
+    setSpeechWords(words)
+    setSpokenWordIndex(0)
+
     const utterance = new SpeechSynthesisUtterance(speechText)
     utterance.rate = 0.95
     utterance.pitch = 1.0
@@ -469,12 +490,36 @@ export default function GeminiStudyChat({
 
     utterance.onstart = () => {
       setCurrentlySpeakingMsgId(msgId)
+      setSpokenWordIndex(0)
+
+      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
+      let currentIdx = 0
+      speechIntervalRef.current = setInterval(() => {
+        currentIdx++
+        if (currentIdx < words.length) {
+          setSpokenWordIndex((prev) => (prev !== null && prev < currentIdx ? currentIdx : prev))
+        }
+      }, 360)
     }
+
+    utterance.onboundary = (event: any) => {
+      if (event.name === 'word' || typeof event.charIndex === 'number') {
+        const charIdx = event.charIndex
+        const textBefore = speechText.slice(0, charIdx)
+        const wordCount = (textBefore.match(/\S+/g) || []).length
+        setSpokenWordIndex(wordCount)
+      }
+    }
+
     utterance.onend = () => {
+      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
       setCurrentlySpeakingMsgId(null)
+      setSpokenWordIndex(null)
     }
     utterance.onerror = () => {
+      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
       setCurrentlySpeakingMsgId(null)
+      setSpokenWordIndex(null)
     }
 
     window.speechSynthesis.speak(utterance)
@@ -486,10 +531,10 @@ export default function GeminiStudyChat({
 
   // ─── INITIAL WELCOME / CONVERSATION VIEW ─────────────────────── //
   return (
-    <div className="relative h-full max-h-screen flex flex-col justify-between max-w-4xl mx-auto px-4 sm:px-6 py-4 overflow-hidden" style={{ fontFamily: 'var(--font-serif)' }}>
+    <div className="relative w-full h-full max-h-screen max-w-4xl mx-auto overflow-hidden" style={{ fontFamily: 'var(--font-serif)' }}>
       {/* ── Welcome Screen ── */}
       {step === 'ask_subject' && (
-        <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center overflow-y-auto custom-scrollbar px-2 py-4">
+        <div className="w-full h-full flex flex-col items-center justify-center text-center overflow-y-auto custom-scrollbar px-4 sm:px-6 py-4 pb-28">
           {/* Mobile Top Bar */}
           {onOpenMobileSidebar && (
             <div className="md:hidden w-full flex items-center justify-between pb-3 border-b border-[var(--paper-rule)] mb-6">
@@ -555,7 +600,11 @@ export default function GeminiStudyChat({
 
       {/* ── Active Conversation Screen (Before Materials) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className="flex-1 min-h-0 flex flex-col space-y-4 pb-28 overflow-y-auto pt-2 notebook-lines custom-scrollbar will-change-scroll">
+        <div
+          ref={chatContainerRef}
+          onScroll={handleScroll}
+          className="w-full h-full flex flex-col space-y-4 px-3 sm:px-6 pt-3 pb-36 overflow-y-auto notebook-lines custom-scrollbar will-change-scroll"
+        >
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b-2 border-[var(--paper-rule)]">
             <div className="flex items-center gap-2 min-w-0">
@@ -594,7 +643,7 @@ export default function GeminiStudyChat({
               className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div
-                className={m.role === 'assistant' ? `relative w-full transition-all duration-300 ${currentlySpeakingMsgId === m.id ? 'bg-[var(--sage-soft)]/30 rounded-2xl p-4' : 'py-2 px-1'}` : ''}
+                className={m.role === 'assistant' ? 'relative w-full py-2 px-1' : ''}
                 style={m.role === 'user'
                   ? {
                     background: 'var(--white)',
@@ -609,30 +658,16 @@ export default function GeminiStudyChat({
                     color: 'var(--ink)',
                   }
                 }>
-                {/* Animated moving audio light beam when reading */}
+                {/* Subtle Minimalist Audio Indicator */}
                 {m.role === 'assistant' && currentlySpeakingMsgId === m.id && (
-                  <motion.div
-                    className="absolute top-0 left-0 right-0 h-[2.5px] bg-gradient-to-r from-transparent via-[var(--sage)] to-transparent"
-                    initial={{ x: '-100%' }}
-                    animate={{ x: '100%' }}
-                    transition={{ repeat: Infinity, duration: 2.0, ease: 'linear' }}
-                  />
-                )}
-
-                {/* Live Speaking Badge */}
-                {m.role === 'assistant' && currentlySpeakingMsgId === m.id && (
-                  <motion.div
-                    initial={{ opacity: 0, y: -4 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="flex items-center gap-1.5 mb-2.5 px-2.5 py-0.5 rounded-full w-fit text-[10.5px] font-semibold"
-                    style={{ background: 'var(--sage-soft)', border: '1px solid var(--sage)', color: 'var(--sage)' }}
-                  >
-                    <span className="relative flex h-2 w-2">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[var(--sage)] opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-[var(--sage)]"></span>
-                    </span>
-                    <span>Reading aloud...</span>
-                  </motion.div>
+                  <div className="flex items-center gap-1.5 mb-2 text-xs text-slate-500 font-sans">
+                    <div className="flex items-center gap-0.5 h-2.5">
+                      <span className="equalizer-bar" style={{ animationDelay: '0s', background: '#334155' }} />
+                      <span className="equalizer-bar" style={{ animationDelay: '0.2s', background: '#334155' }} />
+                      <span className="equalizer-bar" style={{ animationDelay: '0.4s', background: '#334155' }} />
+                    </div>
+                    <span className="text-[11.5px] font-medium text-slate-600">Reading aloud...</span>
+                  </div>
                 )}
 
                 {m.role === 'assistant' && m.thoughtProcess && (
@@ -653,9 +688,29 @@ export default function GeminiStudyChat({
                 )}
 
                 {getDisplayChatText(m) && (
-                  <div className={m.role === 'user' ? 'text-[14px] leading-relaxed text-[#1B2340]' : 'markdown-content'}>
-                    <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{getDisplayChatText(m)}</ReactMarkdown>
-                  </div>
+                  currentlySpeakingMsgId === m.id && speechWords.length > 0 ? (
+                    <div className="text-[15.5px] leading-[1.75] font-serif text-black py-1 select-none">
+                      {speechWords.map((word, wIdx) => {
+                        const isCurrent = wIdx === spokenWordIndex
+                        return (
+                          <span
+                            key={wIdx}
+                            className={
+                              isCurrent
+                                ? 'bg-amber-200/90 text-black font-semibold rounded-sm px-1 py-0.5 shadow-2xs transition-colors duration-150'
+                                : 'text-black'
+                            }
+                          >
+                            {word}{' '}
+                          </span>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <div className={m.role === 'user' ? 'text-[14px] leading-relaxed text-[#1B2340]' : 'markdown-content'}>
+                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{getDisplayChatText(m)}</ReactMarkdown>
+                    </div>
+                  )
                 )}
 
 
@@ -940,10 +995,31 @@ export default function GeminiStudyChat({
         </div>
       )}
 
-      {/* ── Translucent Floating Input Bar (Single Column) ── */}
+      {/* ── Floating Translucent Input Bar (Floating Over the Scrolling Text) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className="sticky bottom-0 w-full z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/85 to-transparent pointer-events-none">
-          <div className="pointer-events-auto max-w-3xl mx-auto px-1">
+        <div className="absolute bottom-0 left-0 right-0 z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/60 to-transparent pointer-events-none">
+          {/* Scroll to Bottom Quick Button */}
+          <AnimatePresence>
+            {showScrollBottom && (
+              <motion.div
+                initial={{ opacity: 0, y: 6, scale: 0.9 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 6, scale: 0.9 }}
+                className="flex justify-center mb-2 pointer-events-auto"
+              >
+                <button
+                  type="button"
+                  onClick={scrollToBottom}
+                  className="w-7 h-7 rounded-full bg-white border border-slate-200 shadow-md flex items-center justify-center text-slate-700 hover:text-black hover:bg-slate-50 transition-all cursor-pointer"
+                  title="Scroll to bottom"
+                >
+                  <ArrowDown size={13} />
+                </button>
+              </motion.div>
+            )}
+          </AnimatePresence>
+
+          <div className="pointer-events-auto max-w-3xl mx-auto px-4 sm:px-6">
             <ChatInputForm
               onSendMessage={(txt) => handleSendMessage(txt)}
               onUploadFile={(file, note) => handleMaterialUpload(file, note)}
