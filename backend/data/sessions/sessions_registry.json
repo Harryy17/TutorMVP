@@ -88,5 +88,14 @@
     "last_active": "2026-09-01T18:00:53.575951",
     "topics_count": 7,
     "messages_count": 10
+  },
+  "session_1788324001651": {
+    "session_id": "session_1788324001651",
+    "title": "Machine Learning Study Session",
+    "subject": "Machine Learning",
+    "created_at": "2026-09-02T10:10:01.684635",
+    "last_active": "2026-09-02T10:11:18.535797",
+    "topics_count": 0,
+    "messages_count": 4
   }
 }

@@ -4,7 +4,7 @@ import {
   Send, Plus, FileText, X, Loader2, Mic, MicOff,
   Sparkles, ArrowRight, BookOpen, Compass, Layers,
   ChevronRight, ChevronDown, Paperclip, CheckCircle2,
-  PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square
+  Menu, PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square
 } from 'lucide-react'
 
 import ReactMarkdown from 'react-markdown'
@@ -47,6 +47,7 @@ interface GeminiStudyChatProps {
   onSessionChange?: (sessionId: string) => void
   onSelectTopicMode?: (topic: TopicItem, mode: 'normal' | 'teacher', sessionId: string) => void
   onOpenStudyMap?: (topics: TopicItem[], subject: string, sessionId: string) => void
+  onOpenMobileSidebar?: () => void
 }
 
 const STARTER_SUGGESTIONS = [
@@ -76,6 +77,7 @@ export default function GeminiStudyChat({
   onSessionChange,
   onSelectTopicMode,
   onOpenStudyMap,
+  onOpenMobileSidebar,
 }: GeminiStudyChatProps) {
   const [step, setStep] = useState<'ask_subject' | 'conversing' | 'analyzing' | 'topics_ready'>('ask_subject')
   const [subject, setSubject] = useState('')
@@ -88,7 +90,9 @@ export default function GeminiStudyChat({
   const [sessionId, setSessionId] = useState(activeSessionId || '')
   const [extractedTopics, setExtractedTopics] = useState<TopicItem[]>([])
   const [isPlanMinimized, setIsPlanMinimized] = useState(true)
+  const [mobileTab, setMobileTab] = useState<'chat' | 'plan'>('chat')
   const [currentlySpeakingMsgId, setCurrentlySpeakingMsgId] = useState<string | null>(null)
+
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
@@ -469,28 +473,63 @@ export default function GeminiStudyChat({
 
   // ─── SPLIT VIEW (Topics Extracted) ───────────────────────────── //
   if (step === 'topics_ready' || step === 'analyzing') {
-
     return (
       <div className="relative min-h-screen flex flex-col" style={{ background: 'var(--paper)' }}>
-        <div className="flex flex-1 min-h-0" style={{ borderLeft: '4px solid var(--margin-red)' }}>
+        <div className="flex flex-1 min-h-0 border-l-2 sm:border-l-4 border-[var(--margin-red)]">
 
           {/* ══ LEFT: Notebook Chat Thread ════════════════════════════ */}
-          <div className="flex-1 flex flex-col min-w-0 notebook-lines">
+          <div className={`flex-1 flex-col min-w-0 notebook-lines ${mobileTab === 'plan' ? 'hidden lg:flex' : 'flex'}`}>
             {/* Header — top rule */}
-            <div className="flex-shrink-0 flex items-center justify-between px-8 py-3"
+            <div className="flex-shrink-0 flex items-center justify-between px-3 sm:px-6 md:px-8 py-2.5 sm:py-3"
               style={{ borderBottom: '2px solid var(--paper-rule)', background: 'var(--white)' }}>
-              <div className="flex items-center gap-2.5">
-                <BookOpen size={14} style={{ color: 'var(--margin-red)' }} />
-                <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
+              <div className="flex items-center gap-2 sm:gap-2.5 min-w-0">
+                {onOpenMobileSidebar && (
+                  <button
+                    onClick={onOpenMobileSidebar}
+                    className="md:hidden p-1.5 rounded-lg hover:bg-[var(--sage-soft)] text-[var(--ink-soft)] transition-colors cursor-pointer shrink-0"
+                    title="Open Workspaces"
+                  >
+                    <Menu size={16} />
+                  </button>
+                )}
+                <BookOpen size={14} className="shrink-0" style={{ color: 'var(--margin-red)' }} />
+                <span className="truncate max-w-[110px] sm:max-w-xs md:max-w-md" style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', color: 'var(--ink-soft)', fontSize: '0.85rem' }}>
                   {subject ? subject : 'Study Session'}
                 </span>
               </div>
-              <div className="flex items-center gap-3">
+
+              {/* Mobile View Tab Switcher for Split View (< lg) */}
+              <div className="flex lg:hidden items-center bg-[var(--paper)] p-0.5 rounded-xl border border-[var(--paper-rule)] mx-1 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => setMobileTab('chat')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    mobileTab === 'chat'
+                      ? 'bg-[var(--white)] text-[var(--ink)] shadow-2xs'
+                      : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  Chat
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setMobileTab('plan')}
+                  className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer ${
+                    mobileTab === 'plan'
+                      ? 'bg-[var(--sage-soft)] text-[var(--sage)] border border-[var(--sage)] shadow-2xs'
+                      : 'text-[var(--ink-soft)] hover:text-[var(--ink)]'
+                  }`}
+                >
+                  Plan ({extractedTopics.length})
+                </button>
+              </div>
+
+              <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                 {isPlanMinimized && extractedTopics.length > 0 && (
                   <button
                     type="button"
                     onClick={() => setIsPlanMinimized(false)}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition-all cursor-pointer"
+                    className="hidden lg:flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold shadow-2xs transition-all cursor-pointer"
                     style={{
                       background: 'var(--sage-soft)',
                       border: '1px solid var(--sage)',
@@ -505,7 +544,7 @@ export default function GeminiStudyChat({
                 <button
                   type="button"
                   onClick={() => { setStep('ask_subject'); setMessages([]); setSubject(''); setExtractedTopics([]) }}
-                  className="text-xs font-medium transition-colors cursor-pointer"
+                  className="text-xs font-medium transition-colors cursor-pointer shrink-0"
                   style={{ color: 'var(--ink-faint)' }}
                   onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ink)')}
                   onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ink-faint)')}
@@ -517,7 +556,7 @@ export default function GeminiStudyChat({
 
 
             {/* Messages Area */}
-            <div className="flex-1 overflow-y-auto px-8 py-5 space-y-5 pb-24 custom-scrollbar">
+            <div className="flex-1 overflow-y-auto px-3 sm:px-6 md:px-8 py-3 sm:py-5 space-y-4 pb-24 custom-scrollbar">
               {messages.map((m) => (
                 <motion.div
                   key={m.id}
@@ -532,8 +571,8 @@ export default function GeminiStudyChat({
                           background: 'var(--white)',
                           border: '1.5px solid var(--paper-rule)',
                           borderRadius: '14px 14px 4px 14px',
-                          padding: '10px 16px',
-                          maxWidth: '82%',
+                          padding: '10px 14px',
+                          maxWidth: '90%',
                           boxShadow: '0 2px 8px rgba(27,35,64,0.04)',
                           color: 'var(--ink)',
                         }
@@ -541,13 +580,14 @@ export default function GeminiStudyChat({
                           background: currentlySpeakingMsgId === m.id ? 'linear-gradient(180deg, #F2F8F4 0%, var(--white) 100%)' : 'var(--white)',
                           border: currentlySpeakingMsgId === m.id ? '1px solid var(--sage)' : '1px solid var(--paper-rule)',
                           borderRadius: '4px 14px 14px 14px',
-                          padding: '12px 16px',
-                          maxWidth: '88%',
+                          padding: '12px 14px',
+                          maxWidth: '95%',
                           borderLeft: currentlySpeakingMsgId === m.id ? '4px solid var(--sage)' : '3px solid var(--highlight)',
                           boxShadow: currentlySpeakingMsgId === m.id ? '0 4px 20px rgba(74, 124, 89, 0.12)' : '0 2px 8px rgba(27,35,64,0.02)',
                         }
                     }
                   >
+
                     {/* Animated moving audio light beam when reading */}
                     {m.role === 'assistant' && currentlySpeakingMsgId === m.id && (
                       <motion.div
@@ -811,7 +851,7 @@ export default function GeminiStudyChat({
             </div>
 
             {/* Input Bar */}
-            <div className="flex-shrink-0 px-6 py-3" style={{ borderTop: '1px solid var(--paper-rule)', background: 'var(--white)' }}>
+            <div className="flex-shrink-0 px-3 sm:px-6 py-2.5 sm:py-3" style={{ borderTop: '1px solid var(--paper-rule)', background: 'var(--white)' }}>
               <ChatInputForm
                 onSendMessage={(txt) => handleSendMessage(txt)}
                 onUploadFile={(file, note) => handleMaterialUpload(file, note)}
@@ -822,31 +862,40 @@ export default function GeminiStudyChat({
           </div>
 
 
-          {/* ══ RIGHT: Plan Rail (Collapsible) ════════════════════════ */}
-          {!isPlanMinimized && (
-            <div className="w-80 xl:w-96 flex-shrink-0 transition-all duration-300 ease-in-out"
-              style={{ background: 'var(--white)', borderLeft: '1px solid var(--paper-rule)' }}>
-              <div className="h-full flex flex-col px-5 py-5">
-                {step === 'analyzing' || extractedTopics.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3">
-                    <div className="w-12 h-12 flex items-center justify-center" style={{ background: 'var(--highlight-soft)', border: '2px solid var(--highlight)', borderRadius: '12px' }}>
-                      <Loader2 size={22} className="animate-spin" style={{ color: 'var(--ink-soft)' }} />
-                    </div>
-                    <p className="text-sm font-bold" style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}>Generating Plan</p>
-                    <p className="text-xs" style={{ color: 'var(--ink-faint)' }}>Extracting topics and structuring syllabus</p>
+          {/* ══ RIGHT: Plan Rail (Collapsible / Mobile Tab View) ════════════════════════ */}
+          <div
+            className={`transition-all duration-300 ease-in-out ${
+              mobileTab === 'plan'
+                ? 'flex-1 flex flex-col min-w-0 h-full w-full'
+                : !isPlanMinimized
+                ? 'hidden lg:flex w-80 xl:w-96 flex-shrink-0'
+                : 'hidden'
+            }`}
+            style={{ background: 'var(--white)', borderLeft: '1px solid var(--paper-rule)' }}
+          >
+            <div className="h-full flex flex-col px-3 sm:px-5 py-3 sm:py-5 overflow-y-auto custom-scrollbar">
+              {step === 'analyzing' || extractedTopics.length === 0 ? (
+                <div className="flex-1 flex flex-col items-center justify-center text-center space-y-3 py-8">
+                  <div className="w-12 h-12 flex items-center justify-center" style={{ background: 'var(--highlight-soft)', border: '2px solid var(--highlight)', borderRadius: '12px' }}>
+                    <Loader2 size={22} className="animate-spin" style={{ color: 'var(--ink-soft)' }} />
                   </div>
-                ) : (
-                  <StudyMapPanel
-                    topics={extractedTopics}
-                    subject={subject}
-                    onStartStudyMap={handleOpenStudyMap}
-                    onSelectTopicMode={handleSelectMode}
-                    onMinimize={() => setIsPlanMinimized(true)}
-                  />
-                )}
-              </div>
+                  <p className="text-sm font-bold" style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}>Generating Plan</p>
+                  <p className="text-xs" style={{ color: 'var(--ink-faint)' }}>Extracting topics and structuring syllabus</p>
+                </div>
+              ) : (
+                <StudyMapPanel
+                  topics={extractedTopics}
+                  subject={subject}
+                  onStartStudyMap={handleOpenStudyMap}
+                  onSelectTopicMode={handleSelectMode}
+                  onMinimize={() => {
+                    setIsPlanMinimized(true)
+                    setMobileTab('chat')
+                  }}
+                />
+              )}
             </div>
-          )}
+          </div>
 
         </div>
       </div>
@@ -855,21 +904,35 @@ export default function GeminiStudyChat({
 
   // ─── INITIAL WELCOME / CONVERSATION VIEW ─────────────────────── //
   return (
-    <div className="relative min-h-[90vh] flex flex-col justify-between max-w-3xl mx-auto px-6 py-10">
+    <div className="relative min-h-[90vh] flex flex-col justify-between max-w-3xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
       {/* ── Welcome Screen ── */}
       {step === 'ask_subject' && (
         <div className="flex-1 flex flex-col items-center justify-center text-center">
+          {/* Mobile Top Bar */}
+          {onOpenMobileSidebar && (
+            <div className="md:hidden w-full flex items-center justify-between pb-3 border-b border-[var(--paper-rule)] mb-6">
+              <button
+                onClick={onOpenMobileSidebar}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--white)] border border-[var(--paper-rule)] text-xs font-semibold text-[var(--ink)] shadow-2xs cursor-pointer"
+              >
+                <Menu size={15} />
+                <span>Workspaces</span>
+              </button>
+              <span className="text-[11px] font-mono text-[var(--ink-soft)] uppercase tracking-wider font-semibold">IndieTutor</span>
+            </div>
+          )}
+
           {/* Notebook logo mark */}
-          <div className="mb-7 flex flex-col items-center gap-1">
+          <div className="mb-6 flex flex-col items-center gap-1">
             <div style={{ width: '44px', height: '6px', background: 'var(--margin-red)', borderRadius: '3px', marginBottom: '3px' }} />
             <div style={{ width: '32px', height: '6px', background: 'var(--highlight)', borderRadius: '3px' }} />
           </div>
 
-          <h1 style={{ fontFamily: 'var(--font-serif)', fontSize: '2.1rem', color: 'var(--ink)', fontWeight: 600, lineHeight: 1.25, marginBottom: '10px' }}>
+          <h1 className="text-2xl sm:text-3xl md:text-4xl font-semibold leading-snug mb-2.5" style={{ fontFamily: 'var(--font-serif)', color: 'var(--ink)' }}>
             What would you like to study,
             <span style={{ display: 'block', fontStyle: 'italic', color: 'var(--margin-red)' }}>{userName}?</span>
           </h1>
-          <p style={{ color: 'var(--ink-soft)', fontSize: '0.9rem', maxWidth: '380px', marginBottom: '32px', lineHeight: 1.6 }}>
+          <p className="text-xs sm:text-sm max-w-sm mb-6 sm:mb-8 leading-relaxed" style={{ color: 'var(--ink-soft)' }}>
             Type what subject, topic, or exam you want to study to start.
           </p>
 
@@ -908,18 +971,27 @@ export default function GeminiStudyChat({
 
       {/* ── Active Conversation Screen (Before Materials) ── */}
       {step === 'conversing' && (
-        <div className="flex-1 flex flex-col space-y-5 pb-28 overflow-y-auto pt-2 notebook-lines custom-scrollbar">
+        <div className="flex-1 flex flex-col space-y-4 pb-28 overflow-y-auto pt-2 notebook-lines custom-scrollbar">
           {/* Header */}
-          <div className="flex items-center justify-between pb-3" style={{ borderBottom: '2px solid var(--paper-rule)' }}>
-            <div className="flex items-center gap-2">
-              <BookOpen size={13} style={{ color: 'var(--margin-red)' }} />
-              <span style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
+          <div className="flex items-center justify-between pb-3 border-b-2 border-[var(--paper-rule)]">
+            <div className="flex items-center gap-2 min-w-0">
+              {onOpenMobileSidebar && (
+                <button
+                  onClick={onOpenMobileSidebar}
+                  className="md:hidden p-1.5 rounded-lg hover:bg-[var(--sage-soft)] text-[var(--ink-soft)] transition-colors cursor-pointer shrink-0"
+                  title="Open Workspaces"
+                >
+                  <Menu size={16} />
+                </button>
+              )}
+              <BookOpen size={13} className="shrink-0" style={{ color: 'var(--margin-red)' }} />
+              <span className="truncate max-w-[150px] sm:max-w-xs md:max-w-md" style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
                 {subject ? subject : 'Study Session'}
               </span>
             </div>
             <button
               onClick={() => { setStep('ask_subject'); setMessages([]); setSubject('') }}
-              className="text-xs font-medium cursor-pointer transition-colors"
+              className="text-xs font-medium cursor-pointer transition-colors shrink-0"
               style={{ color: 'var(--ink-faint)' }}
               onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ink)')}
               onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ink-faint)')}
@@ -927,6 +999,7 @@ export default function GeminiStudyChat({
               ← New Topic
             </button>
           </div>
+
 
           {/* Messages */}
           {messages.map((m) => (
@@ -1214,7 +1287,8 @@ export default function GeminiStudyChat({
 
       {/* ── Fixed Input Bar (Single Column) ── */}
       {step === 'conversing' && (
-        <div className="fixed bottom-5 left-1/2 -translate-x-1/2 w-full max-w-2xl px-4 z-20">
+        <div className="fixed bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 w-full max-w-2xl px-3 sm:px-4 z-20">
+
           {canUploadMaterial && extractedTopics.length === 0 && assistantMsgCount === 2 && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}

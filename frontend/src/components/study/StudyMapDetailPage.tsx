@@ -264,11 +264,11 @@ export default function StudyMapDetailPage({
                   </div>
 
                   {/* Action Mode Selection */}
-                  <div className="mt-3.5 pt-3 flex gap-2" style={{ borderTop: '1px solid var(--paper-line)' }}>
+                  <div className="mt-3.5 pt-3 flex flex-col sm:flex-row gap-2" style={{ borderTop: '1px solid var(--paper-line)' }}>
                     <button
                       type="button"
                       onClick={() => onSelectTopicMode(topic, 'normal')}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-semibold cursor-pointer transition-all"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-1.5 px-3 rounded text-xs font-semibold cursor-pointer transition-all"
                       style={{
                         background: 'var(--sage-soft)',
                         color: 'var(--sage)',
@@ -284,7 +284,7 @@ export default function StudyMapDetailPage({
                     <button
                       type="button"
                       onClick={() => onSelectTopicMode(topic, 'teacher')}
-                      className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-3 rounded text-xs font-semibold cursor-pointer transition-all"
+                      className="flex-1 flex items-center justify-center gap-1.5 py-2 sm:py-1.5 px-3 rounded text-xs font-semibold cursor-pointer transition-all"
                       style={{
                         background: 'var(--ink)',
                         color: 'var(--highlight)',
@@ -306,13 +306,11 @@ export default function StudyMapDetailPage({
             <button
               type="button"
               onClick={() => onSelectTopicMode(firstIncomplete, 'teacher')}
-              className="mt-6 cursor-pointer transition-transform font-semibold text-sm py-3 px-5"
+              className="w-full sm:w-auto mt-6 cursor-pointer transition-transform font-semibold text-sm py-3 px-5 sm:ml-12 rounded-lg"
               style={{
-                marginLeft: '46px',
                 background: 'var(--ink)',
                 color: 'var(--highlight)',
                 border: 'none',
-                borderRadius: '8px',
               }}
               onMouseEnter={(e) => (e.currentTarget.style.transform = 'translateY(-1px)')}
               onMouseLeave={(e) => (e.currentTarget.style.transform = 'none')}
@@ -320,6 +318,7 @@ export default function StudyMapDetailPage({
               Continue: {firstIncomplete.title} →
             </button>
           )}
+
         </div>
       </div>
     </div>

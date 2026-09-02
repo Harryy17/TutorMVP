@@ -22,6 +22,7 @@ export default function StudyPage() {
   const [sessionId, setSessionId] = useState<string>('')
   const [activeSessionId, setActiveSessionId] = useState<string>('')
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false)
+  const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false)
   const [examEvaluation, setExamEvaluation] = useState<any>(null)
 
   // Extracted from PDF for study map — keep alive for navigation
@@ -71,6 +72,8 @@ export default function StudyPage() {
         onNewSession={handleNewSession}
         isCollapsed={isSidebarCollapsed}
         onToggleCollapse={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
+        isMobileOpen={isMobileSidebarOpen}
+        onToggleMobile={setIsMobileSidebarOpen}
       />
 
       <main className="relative z-10 flex-1 min-w-0 h-screen overflow-y-auto">
@@ -94,9 +97,11 @@ export default function StudyPage() {
                 }}
                 onSelectTopicMode={(topic, mode, sid) => handleSelectTopicMode(topic, mode, sid)}
                 onOpenStudyMap={handleOpenStudyMap}
+                onOpenMobileSidebar={() => setIsMobileSidebarOpen(true)}
               />
             </motion.div>
           )}
+
 
 
           {/* ── Page 2: Full Study Map Detail Page ───────────────── */}
