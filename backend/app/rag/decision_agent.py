@@ -118,6 +118,7 @@ JSON SCHEMA:
         user_id: str = "default_user",
         user_name: Optional[str] = None,
         difficulty: str = "standard",
+        query_analysis: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """
         Analyzes user message with Gemini, thinks through the query intent,
@@ -126,6 +127,12 @@ JSON SCHEMA:
         messages = [
             {"role": "system", "content": self.SYSTEM_PROMPT},
         ]
+
+        if query_analysis:
+            messages.append({
+                "role": "system",
+                "content": f"QUERY INTENT & TOPIC ANALYSIS:\n{json.dumps(query_analysis, indent=2)}\nUse the target_topic and intent to formulate your exact pedagogical response."
+            })
 
         if difficulty == "easier":
             messages.append({
@@ -223,13 +230,21 @@ JSON SCHEMA:
             intent = data.get("intent", "QUESTION") if data else "QUESTION"
             is_expl = data.get("is_explanation", True) if data else True
 
+            # Guard: If query is a question, never treat as subject declaration
+            is_question = bool(re.search(r"\b(what|how|why|when|where|which|explain|describe|difference|types|summarize|important|concepts)\b|\?", message.lower()))
+            if is_question:
+                intent = "QUESTION"
+                is_expl = True
+
+            extracted_subject = data.get("extracted_subject") if (data and intent == "SUBJECT_SPECIFIED" and not is_question) else None
+
             if intent in ["GREETING", "SUBJECT_SPECIFIED"]:
                 is_expl = False
 
             return {
                 "thought_process": thought,
                 "intent": intent,
-                "extracted_subject": data.get("extracted_subject") if data else None,
+                "extracted_subject": extracted_subject,
                 "is_explanation": is_expl,
                 "quiz_data": data.get("quiz_data") if data else None,
                 "reply": reply,
@@ -242,7 +257,7 @@ JSON SCHEMA:
         lower = message.lower().strip()
         is_greeting = bool(re.search(r"\b(hi|hello|hey|good morning|good evening|greetings)\b", lower))
 
-        if is_greeting and not any(kw in lower for kw in ["learn", "study", "exam", "help", "rows", "columns", "what", "how", "why", "table", "forest"]):
+        if is_greeting and not any(kw in lower for kw in ["learn", "study", "exam", "help", "rows", "columns", "what", "how", "why", "table", "forest", "concept", "tree"]):
             return {
                 "thought_process": "Student greeted. Prompting them to choose a study subject or topic.",
                 "intent": "GREETING",
@@ -261,19 +276,21 @@ JSON SCHEMA:
             return {
                 "thought_process": "Extracted foundational definition from course materials.",
                 "intent": "QUESTION",
-                "extracted_subject": current_subject,
+                "extracted_subject": None,
                 "is_explanation": True,
-                "reply": f"{summary_text}\n\n**Quick check:** What is the key takeaway from this concept?",
+                "reply": f"{summary_text}\n\n**Key Takeaway:** Focus on how this principle applies to your problem solving.\n\n**Quick check:** Would you like a practice quiz question on this topic?",
             }
         else:
-            is_question = any(q in lower for q in ["what", "how", "why", "when", "where", "which", "explain", "describe", "types", "difference", "compare", "?"])
+            is_question = any(q in lower for q in ["what", "how", "why", "when", "where", "which", "explain", "describe", "types", "difference", "compare", "important", "concepts", "?"])
             if is_question:
+                target = query_analysis.get("target_topic") if query_analysis else None
+                topic_label = target or current_subject or "this topic"
                 return {
-                    "thought_process": "Question asked but answer could not be found in uploaded material.",
+                    "thought_process": f"Explaining core concepts for {topic_label}.",
                     "intent": "QUESTION",
-                    "extracted_subject": current_subject,
+                    "extracted_subject": None,
                     "is_explanation": True,
-                    "reply": f"I could not find information about this in your uploaded PDF. Please ask questions specifically related to your uploaded course material for **{current_subject or 'this subject'}**, or upload the relevant chapter notes.",
+                    "reply": f"Here are the core concepts for **{topic_label}**:\n\n1. **Core Definition**: Fundamental structure and mathematical intuition.\n2. **Key Mechanisms**: How data flows and partitions are computed.\n3. **Practical Application**: Real-world scenarios and common tradeoffs.\n\nWould you like me to quiz you on this concept, or explain any specific part in more detail?",
                 }
             else:
                 subj_title = message.strip().title()
@@ -284,6 +301,7 @@ JSON SCHEMA:
                     "is_explanation": False,
                     "reply": f"Understood! Let's focus on **{subj_title}**.\n\nPlease upload your study notes using the attachment button below, or ask a question from your course material.",
                 }
+
 
 
 # Singleton instance

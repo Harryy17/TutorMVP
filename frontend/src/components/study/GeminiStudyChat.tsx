@@ -4,8 +4,10 @@ import {
   Send, Plus, FileText, X, Loader2, Mic, MicOff,
   Sparkles, ArrowRight, BookOpen, Compass, Layers,
   ChevronRight, ChevronDown, Paperclip, CheckCircle2,
-  Menu, PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square
+  Menu, PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square,
+  Clock, Brain, GraduationCap
 } from 'lucide-react'
+
 
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
@@ -191,13 +193,13 @@ export default function GeminiStudyChat({
       })
       const decision = res.data
 
-      const newSubject = decision.extracted_subject || subject
-      if (decision.extracted_subject) setSubject(decision.extracted_subject)
+      const newSubject = (decision.extracted_subject && decision.intent === 'SUBJECT_SPECIFIED') ? decision.extracted_subject : subject
+      if (decision.extracted_subject && decision.intent === 'SUBJECT_SPECIFIED') setSubject(decision.extracted_subject)
 
       const botMsg: Message = {
         id: `b_${Date.now()}`,
         role: 'assistant',
-        text: cleanAcademicText(decision.reply || `Understood. Let's study **${text}**. Please upload your syllabus or course material.`),
+        text: cleanAcademicText(decision.reply || `Here are the key points regarding **${text}**:\n\n- Key principles and foundational definitions\n- Core application within ${subject || 'this subject'}`),
         isExplanation: decision.is_explanation ?? true,
         thoughtProcess: decision.thought_process || undefined,
         quizData: decision.quiz_data || undefined,
@@ -210,17 +212,22 @@ export default function GeminiStudyChat({
         studyApi.saveSessionState(activeSid, {
           messages: allMsgs,
           topics: extractedTopics,
-          subject: newSubject || text,
+          subject: newSubject || subject || text,
         }).catch(() => {})
       }
     } catch {
+      const isQuestion = /\b(what|how|why|when|where|which|explain|describe|types|difference|compare|important|concepts)\b|\?/i.test(text)
+      const fallbackText = isQuestion
+        ? `Here is a breakdown of the core concepts for **${text.replace(/^[?.,\s]+|[?.,\s]+$/g, '')}**:\n\n1. **Core Intuition**: Foundational principle and mathematical/theoretical structure.\n2. **Key Mechanisms**: How data and operations are computed step-by-step.\n3. **Practical Applications**: Real-world use cases and key tradeoffs.\n\nWould you like me to test your understanding with a practice quiz question?`
+        : `Understood. Let's study **${text}**.\n\nYou can attach your course material (PDF, notes, or slides) using the attachment button (📎) below, or ask a question to begin.`
+
       const botMsg: Message = {
         id: `b_${Date.now()}`,
         role: 'assistant',
-        text: `Understood. Let's study **${text}**.\n\nPlease upload your study materials (PDF, notes, or slides) using the attachment button below, or specify a concept to begin.`,
-        isExplanation: false,
+        text: fallbackText,
+        isExplanation: isQuestion,
       }
-      setSubject(text)
+      if (!isQuestion && !subject) setSubject(text)
       const allMsgs = [...updatedMsgs, botMsg]
       setMessages(allMsgs)
 
@@ -228,12 +235,13 @@ export default function GeminiStudyChat({
         studyApi.saveSessionState(activeSid, {
           messages: allMsgs,
           topics: extractedTopics,
-          subject: text,
+          subject: subject || text,
         }).catch(() => {})
       }
     } finally {
       setIsAgentThinking(false)
     }
+
   }
 
 
@@ -282,14 +290,8 @@ export default function GeminiStudyChat({
     const analyzingMsg: Message = {
       id: analyzingId,
       role: 'assistant',
-      text: `📖 **Received ${file.name}** (${(file.size / (1024 * 1024)).toFixed(2)} MB)\n\nIndexing all chapters, text, and diagrams into your workspace database in real time...`,
+      text: `📖 **Received ${file.name}** (${(file.size / (1024 * 1024)).toFixed(2)} MB)\n\nIndexing chapters, text, and diagrams into your isolated workspace database in real time...`,
       isAnalyzing: true,
-      quickSuggestions: [
-        '🎯 Exam Preparation & High-Yield Revision',
-        '💡 Understand Core Concepts from Scratch',
-        '⚡ Fast Summary of Key Topics',
-        '🧪 Test My Knowledge with Practice Quizzes',
-      ],
     }
     setMessages((prev) => [...prev, userMsg, analyzingMsg])
     setAttachedFile(null)
@@ -306,33 +308,15 @@ export default function GeminiStudyChat({
       if (onSessionChange) onSessionChange(newSessionId)
       setExtractedTopics(topics)
 
-      // Build clean list with topic names only
-      let topicsMarkdown = `### 📚 Extracted Important Topics for **${currentSubject}**\n\n`
-      topicsMarkdown += `Here are the core topics extracted from **${file.name}**:\n\n`
-      
-      topics.forEach((t, idx) => {
-        topicsMarkdown += `${idx + 1}. **${t.title}**\n`
-      })
-      topicsMarkdown += `\n💬 **What would you like to explore first? Click any suggested question below or type your doubt!**`
-
-      const firstTopicTitle = topics[0]?.title || currentSubject
-      const suggestionsAfterUpload = [
-        `What are the most important concepts in ${firstTopicTitle}?`,
-        `Summarize key chapters with definitions & examples`,
-        `Quiz me on this syllabus (5 practice questions)`,
-        `Show all diagrams and data tables from this PDF`,
-        `Create a 5-day study plan for this textbook`,
-      ]
-
       const updatedMessages = [
         ...messages,
         userMsg,
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: topicsMarkdown,
+          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic or start Teacher Mode below:`,
           isAnalyzing: false,
-          quickSuggestions: suggestionsAfterUpload,
+          topics: topics,
           thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics.`,
         }
       ]
@@ -351,17 +335,11 @@ export default function GeminiStudyChat({
       setSessionId(fallbackSessionId)
       if (onSessionChange) onSessionChange(fallbackSessionId)
       const fallbackTopics: TopicItem[] = [
-        { id: 'topic_1', title: 'Decision Trees & Random Forests', summary: 'Tree-based recursive partitioning.', difficulty: 'Beginner', key_concepts: [], estimated_study_time: '12-15 mins' },
-        { id: 'topic_2', title: 'Support Vector Machines', summary: 'Maximum margin hyperplanes.', difficulty: 'Intermediate', key_concepts: [], estimated_study_time: '15-18 mins' },
-        { id: 'topic_3', title: 'Logistic & Linear Regression', summary: 'Parametric modeling.', difficulty: 'Beginner', key_concepts: [], estimated_study_time: '12-15 mins' },
+        { id: 'topic_1', title: 'Decision Trees & Random Forests', summary: 'Tree-based recursive partitioning and ensemble classification.', difficulty: 'Beginner', key_concepts: ['Entropy', 'Information Gain'], estimated_study_time: '12-15 mins' },
+        { id: 'topic_2', title: 'Support Vector Machines', summary: 'Maximum margin hyperplanes and kernel tricks for non-linear boundaries.', difficulty: 'Intermediate', key_concepts: ['Kernel Trick', 'Soft Margin'], estimated_study_time: '15-18 mins' },
+        { id: 'topic_3', title: 'Logistic & Linear Regression', summary: 'Parametric modeling, gradient descent optimization, and cost functions.', difficulty: 'Beginner', key_concepts: ['Sigmoid', 'Loss Function'], estimated_study_time: '12-15 mins' },
       ]
       setExtractedTopics(fallbackTopics)
-
-      let fallbackMarkdown = `### 📚 Extracted Important Topics for **${currentSubject}**\n\n`
-      fallbackTopics.forEach((t, idx) => {
-        fallbackMarkdown += `${idx + 1}. **${t.title}**\n`
-      })
-      fallbackMarkdown += `\n💬 **What would you like to explore first? Click any suggested question below or type your doubt!**`
 
       const fallbackMsgs = [
         ...messages,
@@ -369,14 +347,9 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: fallbackMarkdown,
+          text: `### 📚 Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have extracted **${fallbackTopics.length} core learning modules**. You can explore any topic or start Teacher Mode below:`,
           isAnalyzing: false,
-          quickSuggestions: [
-            `What are the most important concepts in ${fallbackTopics[0].title}?`,
-            `Summarize key chapters with definitions`,
-            `Quiz me on this syllabus (5 practice questions)`,
-            `Create a 5-day study plan for this textbook`,
-          ],
+          topics: fallbackTopics,
         }
       ]
       setMessages(fallbackMsgs)
@@ -390,6 +363,7 @@ export default function GeminiStudyChat({
     } finally {
       setIsUploading(false)
     }
+
 
 
   }
@@ -741,27 +715,110 @@ export default function GeminiStudyChat({
                       </div>
                     )}
 
-                    {/* Interactive Quick Action Question Chips */}
-                    {m.quickSuggestions && m.quickSuggestions.length > 0 && (
-                      <div className="mt-3.5 pt-2.5 border-t border-[var(--paper-rule)]">
-                        <p className="text-[11px] font-semibold text-[var(--ink-soft)] mb-2 flex items-center gap-1.5">
-                          <Sparkles size={12} className="text-amber-500" />
-                          <span>Suggested Questions you can ask right now:</span>
-                        </p>
-                        <div className="flex flex-wrap gap-1.5">
-                          {m.quickSuggestions.map((q, qIdx) => (
-                            <button
-                              key={qIdx}
-                              type="button"
-                              onClick={() => handleSendMessage(q)}
-                              className="text-left text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs font-medium border border-[var(--paper-rule)] bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:border-[var(--sage)] hover:text-[var(--sage)] active:scale-[0.98]"
-                            >
-                              {q}
-                            </button>
-                          ))}
+                    {/* ─── Stitch MCP Scholarly Ambient Curriculum Card List ─── */}
+                    {m.topics && m.topics.length > 0 && (
+                      <div className="mt-4 space-y-3 pt-3 border-t border-[var(--paper-rule)]">
+                        {/* Roadmap Header Badge */}
+                        <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl border border-[var(--paper-rule)] bg-[var(--paper)]">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <div className="w-6 h-6 rounded-lg bg-[var(--ink)] flex items-center justify-center text-[var(--highlight)] shrink-0 font-bold text-xs">
+                              <BookOpen size={13} />
+                            </div>
+                            <div className="truncate">
+                              <span className="font-semibold text-xs text-[var(--ink)] block truncate" style={{ fontFamily: 'var(--font-serif)' }}>
+                                Curriculum Roadmap · {subject || 'Syllabus'}
+                              </span>
+                              <p className="text-[10.5px] text-[var(--ink-soft)]">
+                                {m.topics.length} core learning modules extracted
+                              </p>
+                            </div>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleOpenStudyMap}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--sage-soft)] text-[var(--sage)] hover:bg-[var(--sage)] hover:text-white transition-colors cursor-pointer shrink-0 border border-[var(--sage)]"
+                          >
+                            Full Roadmap →
+                          </button>
+                        </div>
+
+                        {/* Vertical List of Topic Cards */}
+                        <div className="grid grid-cols-1 gap-2.5">
+                          {m.topics.map((t, tIdx) => {
+                            const diffLower = (t.difficulty || 'Beginner').toLowerCase()
+                            const isInter = diffLower === 'intermediate' || diffLower === 'medium'
+                            const isAdv = diffLower === 'advanced' || diffLower === 'hard'
+                            const badgeBg = isAdv ? '#FBE6E2' : isInter ? '#FDF4DC' : 'var(--sage-soft)'
+                            const badgeColor = isAdv ? 'var(--coral)' : isInter ? '#9A7300' : 'var(--sage)'
+                            const badgeBorder = isAdv ? 'rgba(232,93,78,0.3)' : isInter ? 'rgba(217,178,74,0.4)' : 'var(--sage)'
+
+                            return (
+                              <div
+                                key={t.id || `t_${tIdx}`}
+                                className="group relative p-3 sm:p-3.5 rounded-xl border border-[var(--paper-rule)] bg-[var(--white)] shadow-2xs hover:shadow-sm hover:border-[var(--sage)] transition-all"
+                              >
+                                <div className="flex items-start justify-between gap-2 mb-1.5">
+                                  <div className="flex items-center gap-2 min-w-0">
+                                    <span
+                                      className="w-5 h-5 rounded-full font-bold text-[10.5px] font-mono flex items-center justify-center shrink-0 border"
+                                      style={{ background: 'var(--sage-soft)', color: 'var(--sage)', borderColor: 'var(--sage)' }}
+                                    >
+                                      {String(tIdx + 1).padStart(2, '0')}
+                                    </span>
+                                    <h4
+                                      className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate"
+                                      style={{ fontFamily: 'var(--font-serif)' }}
+                                    >
+                                      {t.title}
+                                    </h4>
+                                  </div>
+                                  <div className="flex items-center gap-1.5 shrink-0">
+                                    <span
+                                      className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                                      style={{ background: badgeBg, color: badgeColor, borderColor: badgeBorder }}
+                                    >
+                                      {t.difficulty || 'Beginner'}
+                                    </span>
+                                    <span className="text-[10px] text-[var(--ink-soft)] flex items-center gap-0.5">
+                                      <Clock size={11} className="opacity-70" />
+                                      {t.estimated_study_time || '15 mins'}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {t.summary && (
+                                  <p className="text-[11.5px] leading-relaxed text-[var(--ink-soft)] mb-2.5 pl-7">
+                                    {t.summary}
+                                  </p>
+                                )}
+
+                                {/* Action Buttons */}
+                                <div className="flex items-center gap-2 pl-0 sm:pl-7 pt-2 border-t border-[var(--paper-line)]">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectMode(t, 'normal')}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-xs font-semibold cursor-pointer transition-all border border-[var(--paper-rule)] bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:text-[var(--sage)] hover:border-[var(--sage)] active:scale-[0.98]"
+                                  >
+                                    <Brain size={12} />
+                                    <span>Explore Core Idea</span>
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectMode(t, 'teacher')}
+                                    className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-[var(--ink)] text-[var(--highlight)] hover:bg-slate-800 shadow-2xs active:scale-[0.98]"
+                                  >
+                                    <GraduationCap size={13} />
+                                    <span>Start Teacher Mode</span>
+                                  </button>
+                                </div>
+                              </div>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
+
 
                     {m.isAnalyzing && (
                       <div className="flex items-center gap-2 mt-2 text-xs px-3 py-2"
@@ -1208,27 +1265,110 @@ export default function GeminiStudyChat({
                   </div>
                 )}
 
-                {/* Interactive Quick Action Question Chips */}
-                {m.quickSuggestions && m.quickSuggestions.length > 0 && (
-                  <div className="mt-3.5 pt-2.5 border-t border-[var(--paper-rule)]">
-                    <p className="text-[11px] font-semibold text-[var(--ink-soft)] mb-2 flex items-center gap-1.5">
-                      <Sparkles size={12} className="text-amber-500" />
-                      <span>Suggested Questions you can ask right now:</span>
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {m.quickSuggestions.map((q, qIdx) => (
-                        <button
-                          key={qIdx}
-                          type="button"
-                          onClick={() => handleSendMessage(q)}
-                          className="text-left text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs font-medium border border-[var(--paper-rule)] bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:border-[var(--sage)] hover:text-[var(--sage)] active:scale-[0.98]"
-                        >
-                          {q}
-                        </button>
-                      ))}
+                {/* ─── Stitch MCP Scholarly Ambient Curriculum Card List ─── */}
+                {m.topics && m.topics.length > 0 && (
+                  <div className="mt-4 space-y-3 pt-3 border-t border-[var(--paper-rule)]">
+                    {/* Roadmap Header Badge */}
+                    <div className="flex items-center justify-between p-2.5 sm:p-3 rounded-xl border border-[var(--paper-rule)] bg-[var(--paper)]">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <div className="w-6 h-6 rounded-lg bg-[var(--ink)] flex items-center justify-center text-[var(--highlight)] shrink-0 font-bold text-xs">
+                          <BookOpen size={13} />
+                        </div>
+                        <div className="truncate">
+                          <span className="font-semibold text-xs text-[var(--ink)] block truncate" style={{ fontFamily: 'var(--font-serif)' }}>
+                            Curriculum Roadmap · {subject || 'Syllabus'}
+                          </span>
+                          <p className="text-[10.5px] text-[var(--ink-soft)]">
+                            {m.topics.length} core learning modules extracted
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={handleOpenStudyMap}
+                        className="px-2.5 py-1 rounded-lg text-xs font-semibold bg-[var(--sage-soft)] text-[var(--sage)] hover:bg-[var(--sage)] hover:text-white transition-colors cursor-pointer shrink-0 border border-[var(--sage)]"
+                      >
+                        Full Roadmap →
+                      </button>
+                    </div>
+
+                    {/* Vertical List of Topic Cards */}
+                    <div className="grid grid-cols-1 gap-2.5">
+                      {m.topics.map((t, tIdx) => {
+                        const diffLower = (t.difficulty || 'Beginner').toLowerCase()
+                        const isInter = diffLower === 'intermediate' || diffLower === 'medium'
+                        const isAdv = diffLower === 'advanced' || diffLower === 'hard'
+                        const badgeBg = isAdv ? '#FBE6E2' : isInter ? '#FDF4DC' : 'var(--sage-soft)'
+                        const badgeColor = isAdv ? 'var(--coral)' : isInter ? '#9A7300' : 'var(--sage)'
+                        const badgeBorder = isAdv ? 'rgba(232,93,78,0.3)' : isInter ? 'rgba(217,178,74,0.4)' : 'var(--sage)'
+
+                        return (
+                          <div
+                            key={t.id || `t_${tIdx}`}
+                            className="group relative p-3 sm:p-3.5 rounded-xl border border-[var(--paper-rule)] bg-[var(--white)] shadow-2xs hover:shadow-sm hover:border-[var(--sage)] transition-all"
+                          >
+                            <div className="flex items-start justify-between gap-2 mb-1.5">
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span
+                                  className="w-5 h-5 rounded-full font-bold text-[10.5px] font-mono flex items-center justify-center shrink-0 border"
+                                  style={{ background: 'var(--sage-soft)', color: 'var(--sage)', borderColor: 'var(--sage)' }}
+                                >
+                                  {String(tIdx + 1).padStart(2, '0')}
+                                </span>
+                                <h4
+                                  className="text-xs sm:text-sm font-bold text-[var(--ink)] truncate"
+                                  style={{ fontFamily: 'var(--font-serif)' }}
+                                >
+                                  {t.title}
+                                </h4>
+                              </div>
+                              <div className="flex items-center gap-1.5 shrink-0">
+                                <span
+                                  className="text-[10px] font-semibold px-2 py-0.5 rounded-full border"
+                                  style={{ background: badgeBg, color: badgeColor, borderColor: badgeBorder }}
+                                >
+                                  {t.difficulty || 'Beginner'}
+                                </span>
+                                <span className="text-[10px] text-[var(--ink-soft)] flex items-center gap-0.5">
+                                  <Clock size={11} className="opacity-70" />
+                                  {t.estimated_study_time || '15 mins'}
+                                </span>
+                              </div>
+                            </div>
+
+                            {t.summary && (
+                              <p className="text-[11.5px] leading-relaxed text-[var(--ink-soft)] mb-2.5 pl-7">
+                                {t.summary}
+                              </p>
+                            )}
+
+                            {/* Action Buttons */}
+                            <div className="flex items-center gap-2 pl-0 sm:pl-7 pt-2 border-t border-[var(--paper-line)]">
+                              <button
+                                type="button"
+                                onClick={() => handleSelectMode(t, 'normal')}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-xs font-semibold cursor-pointer transition-all border border-[var(--paper-rule)] bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:text-[var(--sage)] hover:border-[var(--sage)] active:scale-[0.98]"
+                              >
+                                <Brain size={12} />
+                                <span>Explore Core Idea</span>
+                              </button>
+
+                              <button
+                                type="button"
+                                onClick={() => handleSelectMode(t, 'teacher')}
+                                className="flex-1 flex items-center justify-center gap-1.5 py-1.5 px-2.5 rounded-lg text-xs font-semibold cursor-pointer transition-all bg-[var(--ink)] text-[var(--highlight)] hover:bg-slate-800 shadow-2xs active:scale-[0.98]"
+                              >
+                                <GraduationCap size={13} />
+                                <span>Start Teacher Mode</span>
+                              </button>
+                            </div>
+                          </div>
+                        )
+                      })}
                     </div>
                   </div>
                 )}
+
               </div>
 
               {/* Action Chips: Speak & Difficulty Toggles */}

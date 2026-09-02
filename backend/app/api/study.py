@@ -23,9 +23,11 @@ from app.rag.topic_extractor import topic_extractor
 from app.rag.teaching_engine import teaching_engine
 from app.rag.exam_generator import exam_generator
 from app.rag.decision_agent import decision_agent
+from app.rag.query_analyzer import query_analyzer
 from app.rag.doc_processor import doc_processor
 from app.rag.user_memory import user_memory_store
 from app.rag.session_manager import session_manager
+
 
 settings = get_settings()
 router = APIRouter(prefix="/study", tags=["study"])
@@ -147,10 +149,8 @@ async def delete_study_session(session_id: str):
 @router.post("/agent/message")
 async def chat_with_decision_agent(body: AgentMessageRequest):
     """
-    Intelligent Agent endpoint that understands greetings, detects study subjects,
-    and directly answers questions from uploaded study materials using source_type tagged
-    retrieval (text, table, image_caption) with student memory personalization,
-    DeepTutor 5-part explanation structure, and difficulty levels.
+    Intelligent Agent endpoint that analyzes query intent with LLM, extracts clean
+    concept targets, retrieves precise chunks from SQLite FTS5 store, and synthesizes answers.
     """
     context = ""
     file_name = None
@@ -177,22 +177,24 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
                     "topics": saved_state.get("topics", []),
                 }
 
-        effective_query = body.message
-        if len(effective_query.strip()) <= 5 and body.history:
-            for h in reversed(body.history):
-                if h.get("role") == "user" and len(h.get("content", "")) > 5:
-                    effective_query = f"{h.get('content')} {effective_query}"
-                    break
+    # 1. Run LLM Query Analyzer Agent to classify intent & target concept
+    analysis = await query_analyzer.analyze(
+        message=body.message,
+        current_subject=body.current_subject,
+        history=body.history,
+    )
 
-        # Retrieve top chunks with source_type metadata & table/image routing from session store
+    # 2. Use target concept or search queries for precise FTS5 context retrieval
+    search_terms = analysis.get("search_queries") or [body.message]
+    search_query = " OR ".join([f'"{q}"' if " " in q else q for q in search_terms[:2]]) if search_terms else body.message
+
+    if body.session_id:
         context, doc_status_note, _ = doc_processor.retrieve_context(
             doc_id=body.session_id,
-            query=effective_query,
+            query=search_query,
             top_k=6,
             session_id=body.session_id,
         )
-
-
 
     decision = await decision_agent.analyze_and_respond(
         message=body.message,
@@ -204,8 +206,10 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
         user_id=user_id,
         user_name=body.user_name,
         difficulty=body.difficulty or "standard",
+        query_analysis=analysis,
     )
     return decision
+
 
 
 @router.post("/feedback")
