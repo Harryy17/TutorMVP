@@ -96,6 +96,8 @@ export const studyApi = {
     questions: any[]
     answers: Record<string, string>
   }) => api.post('/study/topic/evaluate', data),
+  exportNotesMd: (markdown: string, title?: string) =>
+    api.post('/export/notes-md', { markdown, title: title || 'study_notes' }, { responseType: 'blob' }),
 }
 
 

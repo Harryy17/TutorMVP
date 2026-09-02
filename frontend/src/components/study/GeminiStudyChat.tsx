@@ -5,7 +5,7 @@ import {
   Sparkles, ArrowRight, ArrowDown, BookOpen, Compass, Layers,
   ChevronRight, ChevronDown, Paperclip, CheckCircle2,
   Menu, PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square,
-  Clock, Brain, GraduationCap
+  Clock, Brain, GraduationCap, Download, Code2, Maximize2
 } from 'lucide-react'
 
 
@@ -16,6 +16,7 @@ import rehypeKatex from 'rehype-katex'
 import type { TopicItem } from './TopicCards'
 import StudyMapPanel from './StudyMapPanel'
 import ChatInputForm from './ChatInputForm'
+import MarkdownArtifactViewer from './MarkdownArtifactViewer'
 import { studyApi } from '../../services/api'
 import { cleanAcademicText } from '../../utils/textFormatter'
 
@@ -42,6 +43,8 @@ export interface Message {
   thoughtProcess?: string
   quizData?: QuizData
   quickSuggestions?: string[]
+  response_format?: string
+  export_ready?: boolean
 }
 
 
@@ -98,10 +101,72 @@ export default function GeminiStudyChat({
   const [speechWords, setSpeechWords] = useState<string[]>([])
   const speechIntervalRef = useRef<any>(null)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
+  const [isDownloadingMd, setIsDownloadingMd] = useState<string | null>(null)
+  const [activeArtifact, setActiveArtifact] = useState<{ title: string; markdown: string } | null>(null)
+
+  const isStudyNotesMessage = (m: Message): boolean => {
+    if (m.role !== 'assistant') return false
+    if (m.response_format === 'study_notes' || m.export_ready) return true
+    const txt = m.text || ''
+    return (
+      txt.includes('— Study Notes') ||
+      txt.includes('Quick-Reference Glossary') ||
+      (txt.includes('## 1.') && txt.includes('Suggested next step:'))
+    )
+  }
+
+  const getStudyNotesTitle = (m: Message): string => {
+    const h1Match = m.text.match(/^#\s+(.*?)(?:\s+—\s+Study Notes)?$/m)
+    if (h1Match && h1Match[1]) return h1Match[1].trim()
+    return subject || 'Study Notes'
+  }
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const chatBottomRef = useRef<HTMLDivElement>(null)
   const chatContainerRef = useRef<HTMLDivElement>(null)
+
+  const handleDownloadStudyNotes = async (m: Message) => {
+    setIsDownloadingMd(m.id)
+    try {
+      let docTitle = subject || 'study_notes'
+      const h1Match = m.text.match(/^#\s+(.*?)(?:\s+—\s+Study Notes)?$/m)
+      if (h1Match && h1Match[1]) docTitle = h1Match[1].trim()
+
+      const res = await studyApi.exportNotesMd(m.text, docTitle)
+      const blob = new Blob([res.data], { type: 'text/markdown; charset=utf-8' })
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      const slug = docTitle.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[-\s]+/g, '_')
+      a.download = `${slug}_notes.md`
+      document.body.appendChild(a)
+      a.click()
+      window.URL.revokeObjectURL(url)
+      document.body.removeChild(a)
+    } catch (err) {
+      console.error('Download via API failed, using fallback:', err)
+      // Robust client-side fallback
+      try {
+        let docTitle = subject || 'study_notes'
+        const h1Match = m.text.match(/^#\s+(.*?)(?:\s+—\s+Study Notes)?$/m)
+        if (h1Match && h1Match[1]) docTitle = h1Match[1].trim()
+        const blob = new Blob([m.text], { type: 'text/markdown; charset=utf-8' })
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement('a')
+        a.href = url
+        const slug = docTitle.toLowerCase().replace(/[^\w\s-]/g, '').replace(/[-\s]+/g, '_')
+        a.download = `${slug}_notes.md`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+      } catch (e) {
+        alert('Could not download .md file.')
+      }
+    } finally {
+      setIsDownloadingMd(null)
+    }
+  }
 
   const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
     const el = e.currentTarget
@@ -224,13 +289,20 @@ export default function GeminiStudyChat({
       const newSubject = (decision.extracted_subject && decision.intent === 'SUBJECT_SPECIFIED') ? decision.extracted_subject : subject
       if (decision.extracted_subject && decision.intent === 'SUBJECT_SPECIFIED') setSubject(decision.extracted_subject)
 
+      const isStudyNotes = decision.response_format === 'study_notes' || decision.export_ready
+      const messageText = isStudyNotes
+        ? (decision.reply || '')
+        : cleanAcademicText(decision.reply || `Here are the key points regarding **${text}**:\n\n- Key principles and foundational definitions\n- Core application within ${subject || 'this subject'}`)
+
       const botMsg: Message = {
         id: `b_${Date.now()}`,
         role: 'assistant',
-        text: cleanAcademicText(decision.reply || `Here are the key points regarding **${text}**:\n\n- Key principles and foundational definitions\n- Core application within ${subject || 'this subject'}`),
+        text: messageText,
         isExplanation: decision.is_explanation ?? true,
         thoughtProcess: decision.thought_process || undefined,
         quizData: decision.quiz_data || undefined,
+        response_format: decision.response_format,
+        export_ready: Boolean(decision.export_ready),
       }
 
       const allMsgs = [...updatedMsgs, botMsg]
@@ -497,7 +569,19 @@ export default function GeminiStudyChat({
 
     if (!speechText) return
 
-    const words = speechText.split(/\s+/).filter(Boolean)
+    // Pre-calculate exact character span ranges for every word in speechText
+    const spans: { word: string; start: number; end: number }[] = []
+    const wordRegex = /\S+/g
+    let match: RegExpExecArray | null
+    while ((match = wordRegex.exec(speechText)) !== null) {
+      spans.push({
+        word: match[0],
+        start: match.index,
+        end: match.index + match[0].length,
+      })
+    }
+
+    const words = spans.map((s) => s.word)
     setSpeechWords(words)
     setSpokenWordIndex(0)
 
@@ -519,33 +603,31 @@ export default function GeminiStudyChat({
     utterance.onstart = () => {
       setCurrentlySpeakingMsgId(msgId)
       setSpokenWordIndex(0)
-
-      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
-      let currentIdx = 0
-      speechIntervalRef.current = setInterval(() => {
-        currentIdx++
-        if (currentIdx < words.length) {
-          setSpokenWordIndex((prev) => (prev !== null && prev < currentIdx ? currentIdx : prev))
-        }
-      }, 360)
     }
 
     utterance.onboundary = (event: any) => {
-      if (event.name === 'word' || typeof event.charIndex === 'number') {
+      if (typeof event.charIndex === 'number') {
         const charIdx = event.charIndex
-        const textBefore = speechText.slice(0, charIdx)
-        const wordCount = (textBefore.match(/\S+/g) || []).length
-        setSpokenWordIndex(wordCount)
+        // Find exact word span corresponding to current character index
+        let targetIdx = spans.findIndex((s) => charIdx >= s.start && charIdx <= s.end)
+        if (targetIdx === -1) {
+          for (let i = 0; i < spans.length; i++) {
+            if (spans[i].start >= charIdx) {
+              targetIdx = i
+              break
+            }
+          }
+          if (targetIdx === -1) targetIdx = spans.length - 1
+        }
+        setSpokenWordIndex(targetIdx)
       }
     }
 
     utterance.onend = () => {
-      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
       setCurrentlySpeakingMsgId(null)
       setSpokenWordIndex(null)
     }
     utterance.onerror = () => {
-      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
       setCurrentlySpeakingMsgId(null)
       setSpokenWordIndex(null)
     }
@@ -559,7 +641,7 @@ export default function GeminiStudyChat({
 
   // ─── INITIAL WELCOME / CONVERSATION VIEW ─────────────────────── //
   return (
-    <div className="relative w-full h-full max-h-screen max-w-4xl mx-auto overflow-hidden" style={{ fontFamily: 'var(--font-serif)' }}>
+    <div className={`relative w-full h-full max-h-screen ${activeArtifact ? 'max-w-none' : 'max-w-4xl mx-auto'} overflow-hidden transition-all duration-300`} style={{ fontFamily: 'var(--font-serif)' }}>
       {/* ── Welcome Screen ── */}
       {step === 'ask_subject' && (
         <div className="w-full h-full flex flex-col items-center justify-center text-center overflow-y-auto custom-scrollbar px-4 sm:px-6 py-4 pb-28">
@@ -628,11 +710,12 @@ export default function GeminiStudyChat({
 
       {/* ── Active Conversation Screen (Before Materials) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div
-          ref={chatContainerRef}
-          onScroll={handleScroll}
-          className="w-full h-full flex flex-col space-y-4 px-3 sm:px-6 pt-3 pb-36 overflow-y-auto notebook-lines custom-scrollbar will-change-scroll"
-        >
+        <div className="w-full h-full flex flex-row overflow-hidden relative">
+          <div
+            ref={chatContainerRef}
+            onScroll={handleScroll}
+            className="flex-1 min-w-0 h-full flex flex-col space-y-4 px-3 sm:px-6 pt-3 pb-36 overflow-y-auto notebook-lines custom-scrollbar will-change-scroll"
+          >
           {/* Header */}
           <div className="flex items-center justify-between pb-3 border-b-2 border-[var(--paper-rule)]">
             <div className="flex items-center gap-2 min-w-0">
@@ -733,6 +816,24 @@ export default function GeminiStudyChat({
                           </span>
                         )
                       })}
+                    </div>
+                  ) : isStudyNotesMessage(m) ? (
+                    <div className="mt-1 mb-3 p-5 sm:p-7 rounded-2xl border border-slate-200/90 bg-white/95 shadow-xs markdown-content relative study-notes-card">
+                        <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100 text-xs text-slate-500 font-sans select-none">
+                          <div className="flex items-center gap-2">
+                            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
+                            <span className="font-semibold uppercase tracking-wider text-[11px] text-slate-700">Study Notes Reference</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setActiveArtifact({ title: getStudyNotesTitle(m), markdown: m.text })}
+                            className="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium cursor-pointer hover:underline flex items-center gap-1"
+                          >
+                            <Maximize2 size={11} />
+                            <span>Open Side Viewer</span>
+                          </button>
+                        </div>
+                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{getDisplayChatText(m)}</ReactMarkdown>
                     </div>
                   ) : (
                     <div className={m.role === 'user' ? 'text-[14px] leading-relaxed text-[#1B2340]' : 'markdown-content'}>
@@ -900,9 +1001,22 @@ export default function GeminiStudyChat({
 
               </div>
 
-              {/* Action Chips: Speak & Difficulty Toggles */}
+              {/* Action Chips: View, Speak & Feedback */}
               {m.role === 'assistant' && !m.isAnalyzing && (
-                <div className="flex items-center gap-2 mt-2 pl-0.5">
+                <div className="flex items-center flex-wrap gap-2 mt-2 pl-0.5">
+                  {/* View Option Button Below Response */}
+                  {(isStudyNotesMessage(m) || m.export_ready) && (
+                    <button
+                      type="button"
+                      onClick={() => setActiveArtifact({ title: getStudyNotesTitle(m), markdown: m.text })}
+                      className="flex items-center gap-1.5 text-xs font-semibold cursor-pointer transition-all px-3 py-1 rounded-full shadow-2xs group bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 hover:border-emerald-400 active:scale-[0.98]"
+                      title="Open Markdown Viewer in side panel"
+                    >
+                      <Code2 size={13} className="text-emerald-700" />
+                      <span>View</span>
+                    </button>
+                  )}
+
                   {/* Speaker Button with Natural Wave Animation */}
                   <button
                     type="button"
@@ -1021,11 +1135,27 @@ export default function GeminiStudyChat({
           )}
           <div ref={chatBottomRef} />
         </div>
+
+        {/* Claude-style Side-Panel Markdown Artifact Viewer */}
+        <MarkdownArtifactViewer
+          isOpen={Boolean(activeArtifact)}
+          onClose={() => setActiveArtifact(null)}
+          title={activeArtifact?.title || ''}
+          markdown={activeArtifact?.markdown || ''}
+          onDownload={() => {
+            if (activeArtifact) {
+              const dummyMsg: Message = { id: 'art_dl', role: 'assistant', text: activeArtifact.markdown }
+              handleDownloadStudyNotes(dummyMsg)
+            }
+          }}
+          isDownloading={isDownloadingMd === 'art_dl'}
+        />
+      </div>
       )}
 
       {/* ── Floating Translucent Input Bar (Floating Over the Scrolling Text) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className="absolute bottom-0 left-0 right-0 z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/60 to-transparent pointer-events-none">
+        <div className={`absolute bottom-0 left-0 ${activeArtifact ? 'right-auto w-full lg:w-[calc(100%-500px)] xl:w-[calc(100%-560px)]' : 'right-0'} z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/60 to-transparent pointer-events-none transition-all duration-300`}>
           {/* Scroll to Bottom Quick Button */}
           <AnimatePresence>
             {showScrollBottom && (

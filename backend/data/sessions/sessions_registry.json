@@ -1,21 +1,21 @@
 {
   "session_1788327704052": {
     "session_id": "session_1788327704052",
-    "title": "Geography Study Plan",
+    "title": "Geography",
     "subject": "Geography",
     "created_at": "2026-09-02T11:11:44.075687",
-    "last_active": "2026-09-02T11:25:03.823525",
+    "last_active": "2026-09-02T15:09:33.765970",
     "topics_count": 7,
-    "messages_count": 12
+    "messages_count": 14
   },
   "session_1788328113365": {
     "session_id": "session_1788328113365",
-    "title": "Machine Learning Study Plan",
+    "title": "Machine Learning",
     "subject": "Machine Learning",
     "created_at": "2026-09-02T11:18:33.388546",
-    "last_active": "2026-09-02T11:34:19.369914",
+    "last_active": "2026-09-02T15:03:06.308782",
     "topics_count": 6,
-    "messages_count": 8
+    "messages_count": 10
   },
   "session_7c83686b53": {
     "session_id": "session_7c83686b53",
@@ -77,6 +77,42 @@
     "subject": "General Study",
     "created_at": "2026-09-02T13:59:52.748754",
     "last_active": "2026-09-02T13:59:52.784373",
+    "topics_count": 5,
+    "messages_count": 2
+  },
+  "session_6a7dd1463e": {
+    "session_id": "session_6a7dd1463e",
+    "title": "Contemporary India - II: Textbook in Geography for Class X",
+    "subject": "General Study",
+    "created_at": "2026-09-02T14:06:47.206335",
+    "last_active": "2026-09-02T14:06:47.258664",
+    "topics_count": 7,
+    "messages_count": 2
+  },
+  "session_883f0eb8a3": {
+    "session_id": "session_883f0eb8a3",
+    "title": "help me to solve page number 22...",
+    "subject": "Study Session",
+    "created_at": "2026-09-02T14:07:52.849841",
+    "last_active": "2026-09-02T14:08:58.506377",
+    "topics_count": 7,
+    "messages_count": 4
+  },
+  "session_22fd64f4f7": {
+    "session_id": "session_22fd64f4f7",
+    "title": "give an exam prepared note",
+    "subject": "Study Session",
+    "created_at": "2026-09-02T14:21:13.040382",
+    "last_active": "2026-09-02T14:23:50.271304",
+    "topics_count": 4,
+    "messages_count": 8
+  },
+  "session_521c346537": {
+    "session_id": "session_521c346537",
+    "title": "Module II: Fundamental Rights (Articles 12-35)",
+    "subject": "General Study",
+    "created_at": "2026-09-02T14:27:35.609829",
+    "last_active": "2026-09-02T14:27:35.688573",
     "topics_count": 5,
     "messages_count": 2
   }

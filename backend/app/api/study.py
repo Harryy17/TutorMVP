@@ -7,10 +7,12 @@ Study Page API — 100% Dedicated & Standalone Study Room Router:
 5. Comprehensive mixed examination (written, quiz, fill-in-the-blank) & scoring
 """
 import os
+import io
 import re
 import json
 import uuid
 import asyncio
+import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
@@ -528,3 +530,34 @@ async def evaluate_topic_exam(body: EvaluateRequest):
         student_answers=body.answers,
     )
     return evaluation
+
+
+# ─── 8. Export: Download Study Notes (.md) ────────────────────────────────────
+class ExportNotesRequest(BaseModel):
+    markdown: str
+    title: Optional[str] = "study_notes"
+
+
+@router.post("/export/notes-md")
+async def export_notes_markdown(body: ExportNotesRequest):
+    """
+    Returns the exact un-altered Markdown string as a downloadable .md file attachment.
+    Does not persist files server-side.
+    """
+    raw_title = body.title or "study_notes"
+    # Slugify title for clean filename: keep alphanumeric, replace spaces/dashes with underscore
+    slug = re.sub(r"[^\w\s-]", "", raw_title).strip()
+    slug = re.sub(r"[-\s]+", "_", slug).lower() or "study_notes"
+    filename = f"{slug}_notes.md" if not slug.endswith("_notes") else f"{slug}.md"
+
+    content_bytes = body.markdown.encode("utf-8")
+    safe_filename = urllib.parse.quote(filename)
+
+    return StreamingResponse(
+        io.BytesIO(content_bytes),
+        media_type="text/markdown; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"; filename*=UTF-8\'\'{safe_filename}',
+            "Content-Length": str(len(content_bytes)),
+        },
+    )

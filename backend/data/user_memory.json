@@ -2,11 +2,12 @@
   "sreehari_ps": {
     "user_id": "sreehari_ps",
     "name": "Student",
-    "learning_style": "Step-by-step with clear examples",
+    "learning_style": "wants exam-prepared concise notes",
     "active_goals": [
       "Master academic coursework",
       "Build strong conceptual foundations",
-      "Wants to know important exam topics"
+      "Wants to know important exam topics",
+      "prepare for an exam"
     ],
     "studied_topics": [],
     "weaknesses": [],

@@ -72,3 +72,9 @@ async def health():
         "service": "Indie Tutor Study Room",
     }
 
+
+@app.post("/api/export/notes-md")
+async def export_notes_md(body: study.ExportNotesRequest):
+    return await study.export_notes_markdown(body)
+
+

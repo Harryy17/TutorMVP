@@ -48,13 +48,17 @@ Work through this reasoning chain internally before writing JSON:
    numeric/tabular facts) or image/diagram data (e.g. "explain the architecture/diagram/figure")?
 5. RESPONSE FORMAT: Pick the contract the executor should follow: "comparison" (vs/difference/trade-offs),
    "list" (bullet points / enumerate), "diagram" (architecture/figure/visual explanation), "quiz"
-   (test me / ask me questions), "study_plan" (timetable / roadmap), or "conceptual" (default explanation).
+   (test me / ask me questions), "study_plan" (timetable / roadmap), "study_notes" (standalone reference
+   document/cheat sheet/notes), or "conceptual" (default explanation).
+   - study_notes: student wants a standalone reference document (notes/cheat sheet), not a conversational
+     answer. Trigger only on explicit requests ("notes", "cheat sheet", "study map", "summarize as notes") — a
+     plain question ("what is X") stays "conceptual" even if the answer could double as notes.
 6. CONFIDENCE: Rate 0.0-1.0 how confident you are in this classification. Use < 0.5 only when the message
    is genuinely ambiguous (e.g. a single vague word with no context).
 
 CRITICAL RULES:
 - NEVER classify a question sentence (contains what/how/why/explain/compare/difference/? etc.) as
-  "NEW_SUBJECT_DECLARATION". Questions are always "EXPLANATION_REQUEST", "QUIZ_REQUEST", or "QUIZ_ANSWER".
+  "NEW_SUBJECT_DECLARATION". Questions are always "EXPLANATION_REQUEST", "STUDY_NOTES_REQUEST", "QUIZ_REQUEST", or "QUIZ_ANSWER".
 - `target_topic` and `extracted_subject` must be clean concept/subject noun-phrases, never a full question
   sentence and never prefixed with "what is/explain/tell me about".
 - If the student is answering a quiz (a short answer like "A", "Option B", a single term, or a short
@@ -62,6 +66,7 @@ CRITICAL RULES:
 
 INTENT TYPES:
 - "EXPLANATION_REQUEST": explain / find important topics / summarize / compare / clarify doubts.
+- "STUDY_NOTES_REQUEST": student explicitly wants structured study notes, a cheat sheet, a revision summary, or a "study map" for a topic — not a single Q&A answer (e.g. "give me study notes on X", "make notes for revision", "create a cheat sheet on X", "summarize this chapter as notes").
 - "QUIZ_REQUEST": be tested/quizzed ("quiz me", "test me", "ask 5 questions").
 - "QUIZ_ANSWER": answering a previous quiz question.
 - "STUDY_PLAN_REQUEST": timetable, revision strategy, roadmap.
@@ -71,12 +76,12 @@ INTENT TYPES:
 Respond with ONLY this JSON object, no preamble, no markdown fences:
 {
   "reasoning": "1-3 sentence internal reasoning trace covering steps 1-5 above",
-  "intent": "EXPLANATION_REQUEST" | "QUIZ_REQUEST" | "QUIZ_ANSWER" | "STUDY_PLAN_REQUEST" | "NEW_SUBJECT_DECLARATION" | "GREETING",
+  "intent": "EXPLANATION_REQUEST" | "STUDY_NOTES_REQUEST" | "QUIZ_REQUEST" | "QUIZ_ANSWER" | "STUDY_PLAN_REQUEST" | "NEW_SUBJECT_DECLARATION" | "GREETING",
   "sub_questions": ["atomic sub-question 1", "atomic sub-question 2"],
   "target_topic": "Clean topic/entity name or null",
   "search_queries": ["query 1", "query 2"],
   "extracted_subject": "Clean broad subject name if declaring new subject, else null",
-  "response_format": "comparison" | "list" | "diagram" | "quiz" | "study_plan" | "conceptual",
+  "response_format": "comparison" | "list" | "diagram" | "quiz" | "study_plan" | "study_notes" | "conceptual",
   "requires_table_data": true | false,
   "requires_image_data": true | false,
   "confidence": 0.0,
@@ -282,6 +287,9 @@ class QueryAnalyzerAgent:
     def _heuristic_plan(self, raw_msg: str, current_subject: Optional[str]) -> QueryPlan:
         """Deterministic fallback used only if the LLM is unreachable after all retries."""
         lower = raw_msg.lower()
+        is_study_notes = bool(re.search(
+            r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes)\b", lower
+        ))
         is_question = bool(re.search(
             r"\b(what|how|why|when|where|which|explain|describe|difference|types|"
             r"summarize|important|concepts|compare)\b|\?",
@@ -290,6 +298,23 @@ class QueryAnalyzerAgent:
         is_quiz = bool(re.search(r"\b(quiz|test me|ask me|practice questions)\b", lower))
         is_comparison = bool(re.search(r"\b(vs|versus|compare|difference|trade-?offs?)\b", lower))
         is_diagram = bool(re.search(r"\b(diagram|architecture|figure|visual|image)\b", lower))
+
+        if is_study_notes:
+            clean_topic = _clean_topic_string(
+                re.sub(r"\b(give me|make|create|prepare|generate|summarize|as)?\s*(study notes?|cheat sheet|revision notes?|study map|notes?)\s*(on|for|about)?\s*", "", lower, flags=re.IGNORECASE)
+            )
+            topic = (clean_topic.title() if clean_topic and len(clean_topic) > 2 else current_subject)
+            return QueryPlan(
+                intent="STUDY_NOTES_REQUEST",
+                reasoning="Heuristic fallback: matched explicit study-notes keywords.",
+                sub_questions=[raw_msg],
+                target_topic=topic,
+                search_queries=[q for q in [topic, raw_msg] if q],
+                response_format="study_notes",
+                confidence=0.5,
+                needs_clarification=False,
+                recommended_action="EXPLAIN",
+            )
 
         if is_quiz:
             return QueryPlan(

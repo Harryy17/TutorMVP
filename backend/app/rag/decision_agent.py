@@ -72,6 +72,27 @@ RESPONSE GUIDELINES:
     3. Break down the visual workflow step-by-step with bold labels.
     4. Provide a **Concrete Example**.
     5. End with a natural yes/no conversational question (e.g., *"Would you like to explore how data flows through the next layer in this architecture?"*).
+  - **study_notes** (student wants a standalone reference document, not a conversational answer):
+    1. Start with a single H1 title: `# {Topic} — Study Notes`.
+    2. If the student's memory shows related prior topics, add one italic line:
+       `*Builds on: {prior topics}*`.
+    3. Break the topic into 5-9 numbered `## ` sections covering, in order: core definition/overview,
+       key mechanisms or sub-concepts, how it's used/applied, common variants or techniques, key
+       limitations or trade-offs, and how it's evaluated or tested (skip any section that doesn't
+       apply to the topic).
+    4. Wherever the material has comparable items (algorithms, methods, terms), render them as a
+       Markdown table rather than prose — this is what makes notes scannable for revision.
+    5. End with a `## Quick-Reference Glossary` — a two-column Markdown table of the 6-10 most
+       important terms and one-line definitions.
+    6. Close with one line: `**Suggested next step:** ...` — a natural follow-on topic, grounded in
+       the student's memory/current subject if available, otherwise grounded in what a learner would
+       logically study next.
+    7. Use ONLY the retrieved course material for facts; if the material doesn't cover the topic at
+       all, do not silently fall back to general knowledge — use the standard "not found in material"
+       rule instead of producing generic notes.
+    8. This format must render as clean, valid Markdown only — no HTML tags, no page citations — since
+       it is rendered directly in the chat UI's Markdown viewer and also offered as a downloadable
+       `.md` file as-is.
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
     clearly labeled section (bold sub-heading per sub-question) rather than blending them into one block.
 - **MATHEMATICAL EQUATIONS & FORMULAS**: Always put core mathematical equations, laws, and algebraic formulas in standalone block math `$$ ... $$` so they automatically render inside a dedicated, highlighted formula box for the student.
@@ -98,11 +119,6 @@ INTENT HANDLING & INTERACTIVE CONVERSATION RULES:
      - Warmly acknowledge (e.g., *"No problem! What other concept or topic would you like to explore next?"*) and wait for their direction.
 4. QUIZ / QUESTION MODE (CRITICAL ONE-BY-ONE RULE):
    - When the student asks to be tested or asked questions (e.g. "ask me 2 questions", "quiz me with 3 questions"):
-     - **NEVER OUTPUT MULTIPLE QUESTIONS AT ONCE.**
-     - Determine total_questions N (from user request, default 3).
-     - Ask **Question 1 of N**.
-     - Populate `quiz_data` with: `{"question_number": 1, "total_questions": N, "question_text": "...", "options": ["A) ...", "B) ...", "C) ...", "D) ..."], "correct_option": "A", "evaluation": null, "is_completed": false}`.
-     - In `"reply"`, write ONLY a brief warm intro (e.g. "Let's test your knowledge on {Topic}!"). **DO NOT print the A/B/C/D options in the reply text**, because the interactive quiz card handles options below.
    - When the student replies with an answer (e.g. selects an option or explains):
      - Check the previous question number from conversation history.
      - **If answering Question K where K < total_questions (e.g. answering Question 1 of 2):**
@@ -130,6 +146,8 @@ JSON SCHEMA:
     "is_completed": false
   } | null,
   "reply": "Clean Markdown formatted text of the question or answer evaluation",
+  "response_format": "conceptual" | "comparison" | "list" | "diagram" | "quiz" | "study_plan" | "study_notes",
+  "export_ready": true | false,
   "groundedness_note": "1 short sentence: which parts of the reply are directly supported by retrieved context vs general knowledge, or 'not found in material' if applicable"
 }
 Respond with ONLY this JSON object, no preamble, no markdown fences.
@@ -387,6 +405,11 @@ Respond with ONLY this JSON object:
         if intent in ("GREETING", "SUBJECT_SPECIFIED"):
             is_expl = False
 
+        result_format = data.get("response_format", "conceptual")
+        export_ready = (result_format == "study_notes")
+        if "could not find the answer" in reply.lower() or "not found in your uploaded" in reply.lower():
+            export_ready = False
+
         return {
             "thought_process": thought,
             "intent": intent,
@@ -395,6 +418,8 @@ Respond with ONLY this JSON object:
             "quiz_data": data.get("quiz_data"),
             "reply": reply,
             "groundedness_note": data.get("groundedness_note"),
+            "response_format": result_format,
+            "export_ready": export_ready,
         }
 
     # ------------------------------------------------------------------
@@ -468,6 +493,21 @@ Respond with ONLY this JSON object:
         current_subject: Optional[str],
         query_analysis: Optional[Dict[str, Any]],
     ) -> Dict[str, Any]:
+        # Handle study notes fallback explicitly
+        if query_analysis and (query_analysis.get("intent") == "STUDY_NOTES_REQUEST" or query_analysis.get("response_format") == "study_notes"):
+            target = query_analysis.get("target_topic") or current_subject or "this topic"
+            return {
+                "thought_process": f"LLM unavailable; failed to generate structured study notes for {target}.",
+                "intent": "STUDY_NOTES_REQUEST",
+                "extracted_subject": None,
+                "is_explanation": True,
+                "quiz_data": None,
+                "reply": f"I couldn't reach the reasoning engine to generate study notes for **{target}** just now. Please verify your connection or try again in a moment.",
+                "groundedness_note": "Notes generation fallback; LLM unreachable.",
+                "response_format": "study_notes",
+                "export_ready": False,
+            }
+
         lower = message.lower().strip()
         is_greeting = bool(re.search(r"\b(hi|hello|hey|good morning|good evening|greetings)\b", lower))
 
