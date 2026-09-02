@@ -282,8 +282,14 @@ export default function GeminiStudyChat({
     const analyzingMsg: Message = {
       id: analyzingId,
       role: 'assistant',
-      text: `Analyzing document structure and extracting curriculum syllabus in real time...`,
+      text: `📖 **Received ${file.name}** (${(file.size / (1024 * 1024)).toFixed(2)} MB)\n\nIndexing all chapters, text, and diagrams into your workspace database in real time...`,
       isAnalyzing: true,
+      quickSuggestions: [
+        '🎯 Exam Preparation & High-Yield Revision',
+        '💡 Understand Core Concepts from Scratch',
+        '⚡ Fast Summary of Key Topics',
+        '🧪 Test My Knowledge with Practice Quizzes',
+      ],
     }
     setMessages((prev) => [...prev, userMsg, analyzingMsg])
     setAttachedFile(null)
@@ -307,7 +313,16 @@ export default function GeminiStudyChat({
       topics.forEach((t, idx) => {
         topicsMarkdown += `${idx + 1}. **${t.title}**\n`
       })
-      topicsMarkdown += `\n💬 **You can now ask questions or clarify doubts directly!**`
+      topicsMarkdown += `\n💬 **What would you like to explore first? Click any suggested question below or type your doubt!**`
+
+      const firstTopicTitle = topics[0]?.title || currentSubject
+      const suggestionsAfterUpload = [
+        `What are the most important concepts in ${firstTopicTitle}?`,
+        `Summarize key chapters with definitions & examples`,
+        `Quiz me on this syllabus (5 practice questions)`,
+        `Show all diagrams and data tables from this PDF`,
+        `Create a 5-day study plan for this textbook`,
+      ]
 
       const updatedMessages = [
         ...messages,
@@ -317,6 +332,7 @@ export default function GeminiStudyChat({
           role: 'assistant' as const,
           text: topicsMarkdown,
           isAnalyzing: false,
+          quickSuggestions: suggestionsAfterUpload,
           thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics.`,
         }
       ]
@@ -345,7 +361,7 @@ export default function GeminiStudyChat({
       fallbackTopics.forEach((t, idx) => {
         fallbackMarkdown += `${idx + 1}. **${t.title}**\n`
       })
-      fallbackMarkdown += `\n💬 **You can now ask questions or clarify doubts directly!**`
+      fallbackMarkdown += `\n💬 **What would you like to explore first? Click any suggested question below or type your doubt!**`
 
       const fallbackMsgs = [
         ...messages,
@@ -355,6 +371,12 @@ export default function GeminiStudyChat({
           role: 'assistant' as const,
           text: fallbackMarkdown,
           isAnalyzing: false,
+          quickSuggestions: [
+            `What are the most important concepts in ${fallbackTopics[0].title}?`,
+            `Summarize key chapters with definitions`,
+            `Quiz me on this syllabus (5 practice questions)`,
+            `Create a 5-day study plan for this textbook`,
+          ],
         }
       ]
       setMessages(fallbackMsgs)
@@ -368,6 +390,7 @@ export default function GeminiStudyChat({
     } finally {
       setIsUploading(false)
     }
+
 
   }
 
@@ -718,6 +741,27 @@ export default function GeminiStudyChat({
                       </div>
                     )}
 
+                    {/* Interactive Quick Action Question Chips */}
+                    {m.quickSuggestions && m.quickSuggestions.length > 0 && (
+                      <div className="mt-3.5 pt-2.5 border-t border-[var(--paper-rule)]">
+                        <p className="text-[11px] font-semibold text-[var(--ink-soft)] mb-2 flex items-center gap-1.5">
+                          <Sparkles size={12} className="text-amber-500" />
+                          <span>Suggested Questions you can ask right now:</span>
+                        </p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {m.quickSuggestions.map((q, qIdx) => (
+                            <button
+                              key={qIdx}
+                              type="button"
+                              onClick={() => handleSendMessage(q)}
+                              className="text-left text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs font-medium border border-[var(--paper-rule)] bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:border-[var(--sage)] hover:text-[var(--sage)] active:scale-[0.98]"
+                            >
+                              {q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
                     {m.isAnalyzing && (
                       <div className="flex items-center gap-2 mt-2 text-xs px-3 py-2"
@@ -727,6 +771,7 @@ export default function GeminiStudyChat({
                       </div>
                     )}
                   </div>
+
 
                   {/* Action Chips: Speak & Difficulty Toggles */}
                   {m.role === 'assistant' && !m.isAnalyzing && (
@@ -940,12 +985,14 @@ export default function GeminiStudyChat({
           <div className="w-full max-w-xl mb-6">
             <ChatInputForm
               onSendMessage={(txt) => handleSendMessage(txt)}
-              allowUpload={false}
+              onUploadFile={(file, note) => handleMaterialUpload(file, note)}
+              allowUpload={true}
               disabled={isAgentThinking || isUploading}
-              placeholder="e.g. Machine Learning, Class 10 Geography, Physics..."
+              placeholder="e.g. Machine Learning, or attach syllabus/textbook PDF (📎)..."
               autoFocus
             />
           </div>
+
 
 
 
@@ -1160,6 +1207,28 @@ export default function GeminiStudyChat({
                     <span style={{ opacity: 0.65 }}>({m.attachment.size})</span>
                   </div>
                 )}
+
+                {/* Interactive Quick Action Question Chips */}
+                {m.quickSuggestions && m.quickSuggestions.length > 0 && (
+                  <div className="mt-3.5 pt-2.5 border-t border-[var(--paper-rule)]">
+                    <p className="text-[11px] font-semibold text-[var(--ink-soft)] mb-2 flex items-center gap-1.5">
+                      <Sparkles size={12} className="text-amber-500" />
+                      <span>Suggested Questions you can ask right now:</span>
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {m.quickSuggestions.map((q, qIdx) => (
+                        <button
+                          key={qIdx}
+                          type="button"
+                          onClick={() => handleSendMessage(q)}
+                          className="text-left text-xs px-3 py-1.5 rounded-xl transition-all cursor-pointer shadow-2xs font-medium border border-[var(--paper-rule)] bg-[var(--white)] text-[var(--ink)] hover:bg-[var(--sage-soft)] hover:border-[var(--sage)] hover:text-[var(--sage)] active:scale-[0.98]"
+                        >
+                          {q}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Action Chips: Speak & Difficulty Toggles */}
@@ -1288,43 +1357,19 @@ export default function GeminiStudyChat({
       {/* ── Fixed Input Bar (Single Column) ── */}
       {step === 'conversing' && (
         <div className="fixed bottom-3 sm:bottom-5 left-1/2 -translate-x-1/2 w-full max-w-2xl px-3 sm:px-4 z-20">
-
-          {canUploadMaterial && extractedTopics.length === 0 && assistantMsgCount === 2 && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="mb-2 flex items-center justify-between px-3.5 py-1.5 rounded-xl text-xs font-medium backdrop-blur-md shadow-2xs"
-              style={{
-                background: 'var(--sage-soft)',
-                border: '1px solid var(--sage)',
-                color: 'var(--sage)',
-              }}
-            >
-              <div className="flex items-center gap-1.5">
-                <Paperclip size={13} />
-                <span>Upload Unlocked: You can now attach your syllabus or textbook PDF below!</span>
-              </div>
-            </motion.div>
-          )}
-
           <ChatInputForm
             onSendMessage={(txt) => handleSendMessage(txt)}
             onUploadFile={(file, note) => handleMaterialUpload(file, note)}
             disabled={isAgentThinking || isUploading}
-            allowUpload={canUploadMaterial}
-            placeholder={
-              canUploadMaterial
-                ? 'Ask a question or attach course material PDF (📎)...'
-                : assistantMsgCount < 1
-                ? 'Type what you would like to study...'
-                : 'Answer the question above to continue (Step 2 of 2)...'
-            }
+            allowUpload={true}
+            placeholder="Ask a question or attach course material PDF (📎)..."
           />
         </div>
       )}
     </div>
   )
 }
+
 
 
 
