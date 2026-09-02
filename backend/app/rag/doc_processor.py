@@ -372,38 +372,71 @@ class DocumentProcessor:
         return "\n".join(md_lines)
 
     # ─── IMAGE EXTRACTION & VLM CAPTIONING HELPER ─────────────────────────
-    async def _extract_and_caption_images(self, file_path: str, doc_id: str, max_images: int = 10) -> List[DocumentChunk]:
-        """Extracts images from PDF pages and runs Gemini VLM factual captioning."""
+    async def _extract_and_caption_images(self, file_path: str, doc_id: str, max_images: int = 15) -> List[DocumentChunk]:
+        """Extracts images from PDF pages and runs Gemini VLM factual captioning with PyMuPDF."""
         image_chunks: List[DocumentChunk] = []
 
         try:
-            reader = pypdf.PdfReader(file_path)
-            extracted_count = 0
-
-            for page_idx, page in enumerate(reader.pages):
-                page_num = page_idx + 1
-                if extracted_count >= max_images:
-                    break
-
-                try:
-                    page_images = list(page.images)
-                except Exception:
-                    page_images = []
-
-                for img_idx, img_obj in enumerate(page_images):
-                    if extracted_count >= max_images:
+            try:
+                import fitz  # PyMuPDF
+                pdf_doc = fitz.open(file_path)
+                for page_num in range(len(pdf_doc)):
+                    if len(image_chunks) >= max_images:
                         break
+                    page = pdf_doc[page_num]
+                    page_text = page.get_text()
+                    image_list = page.get_images(full=True)
 
+                    for img_index, img in enumerate(image_list):
+                        if len(image_chunks) >= max_images:
+                            break
+                        xref = img[0]
+                        base_image = pdf_doc.extract_image(xref)
+                        image_bytes = base_image.get("image")
+                        image_ext = base_image.get("ext", "jpeg")
+
+                        if not image_bytes or len(image_bytes) < 3000:
+                            continue
+
+                        # Extract potential figure numbers and captions from page text (e.g. "Fig. 4.3: Bamboo plantation in North-east")
+                        fig_matches = re.findall(r"(?:Fig(?:ure)?\.?\s*\d+(?:\.\d+)?[:\s\-\–][^\n\.\;]{4,100})", page_text, re.IGNORECASE)
+                        page_fig_context = "; ".join(fig_matches[:3]) if fig_matches else ""
+
+                        caption = await self._caption_image_with_vlm(image_bytes, mime_type=f"image/{image_ext}", context_hint=page_fig_context)
+
+                        content_parts = [f"Figure / Diagram on Page {page_num + 1}"]
+                        if page_fig_context:
+                            content_parts.append(f"Figure Caption in text: {page_fig_context}")
+                        if caption:
+                            content_parts.append(f"Visual Details: {caption.strip()}")
+
+                        if len(content_parts) > 1:
+                            chunk = DocumentChunk(
+                                chunk_id=f"{doc_id}_p{page_num+1}_img_{img_index+1}",
+                                doc_id=doc_id,
+                                page=page_num + 1,
+                                source_type="image_caption",
+                                content=". ".join(content_parts),
+                                metadata={"image_index": img_index + 1}
+                            )
+                            image_chunks.append(chunk)
+            except Exception as fitz_err:
+                print(f"[DocProcessor] PyMuPDF extraction fallback to pypdf: {fitz_err}")
+                reader = pypdf.PdfReader(file_path)
+                for page_idx, page in enumerate(reader.pages):
+                    page_num = page_idx + 1
+                    if len(image_chunks) >= max_images:
+                        break
                     try:
+                        page_images = list(page.images)
+                    except Exception:
+                        page_images = []
+                    for img_idx, img_obj in enumerate(page_images):
+                        if len(image_chunks) >= max_images:
+                            break
                         img_bytes = img_obj.data
-                        # Filter out tiny icon-sized images
-                        if len(img_bytes) < 4000:
+                        if len(img_bytes) < 3000:
                             continue
-
-                        pil_img = Image.open(io.BytesIO(img_bytes))
-                        if pil_img.width < 100 or pil_img.height < 100:
-                            continue
-
                         caption = await self._caption_image_with_vlm(img_bytes)
                         if caption and len(caption.strip()) > 10:
                             chunk = DocumentChunk(
@@ -412,33 +445,29 @@ class DocumentProcessor:
                                 page=page_num,
                                 source_type="image_caption",
                                 content=f"Figure/Diagram on Page {page_num}: {caption.strip()}",
-                                metadata={"image_name": getattr(img_obj, 'name', 'img'), "dimensions": f"{pil_img.width}x{pil_img.height}"}
                             )
                             image_chunks.append(chunk)
-                            extracted_count += 1
-                    except Exception as img_err:
-                        continue
-
-
         except Exception as e:
             print(f"[DocProcessor] PDF Image extraction error: {e}")
 
         return image_chunks
 
-    async def _caption_image_with_vlm(self, image_bytes: bytes) -> str:
-        """Calls Gemini Vision API with the factual captioning prompt."""
+    async def _caption_image_with_vlm(self, image_bytes: bytes, mime_type: str = "image/jpeg", context_hint: str = "") -> str:
+        """Calls Gemini Vision API with cascade to describe figures and diagrams factually."""
         api_key = _get_active_gemini_key()
         if not api_key:
             return ""
 
         import base64
         b64_data = base64.b64encode(image_bytes).decode("utf-8")
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
-
 
         prompt = (
-            "Describe this figure/diagram/chart factually, including any labels, "
-            "axis values, or numbers visible. Be concise, precise, and objective."
+            "Analyze and describe this educational figure, photo, diagram, or chart in detail.\n"
+            f"{f'Context / Surrounding Caption: {context_hint}' if context_hint else ''}\n"
+            "MANDATORY:\n"
+            "1. State the figure title, number (e.g. Fig. 1.2), or subject matter.\n"
+            "2. Describe the key visual elements, features, processes, and any text labels or data shown.\n"
+            "3. Keep the description clear, factual, and concise."
         )
 
         payload = {
@@ -448,28 +477,37 @@ class DocumentProcessor:
                         {"text": prompt},
                         {
                             "inline_data": {
-                                "mime_type": "image/jpeg",
+                                "mime_type": mime_type if "image/" in mime_type else "image/jpeg",
                                 "data": b64_data,
                             }
                         }
                     ]
                 }
             ],
-            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 300}
+            "generationConfig": {"temperature": 0.1, "maxOutputTokens": 400}
         }
 
-        try:
-            async with httpx.AsyncClient(timeout=15.0) as client:
-                res = await client.post(url, json=payload)
-                if res.status_code == 200:
-                    data = res.json()
-                    candidates = data.get("candidates", [])
-                    if candidates:
-                        parts = candidates[0].get("content", {}).get("parts", [])
-                        if parts:
-                            return parts[0].get("text", "").strip()
-        except Exception as e:
-            print(f"[DocProcessor] VLM Caption call failed: {e}")
+        models_to_try = [
+            "gemini-3.5-flash-lite",
+            "gemini-3.6-flash",
+            "gemini-flash-latest",
+            "gemini-3.7-flash",
+            "gemini-3.5-flash",
+        ]
+        for model in models_to_try:
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={api_key}"
+            try:
+                async with httpx.AsyncClient(timeout=15.0) as client:
+                    res = await client.post(url, json=payload)
+                    if res.status_code == 200:
+                        data = res.json()
+                        candidates = data.get("candidates", [])
+                        if candidates:
+                            parts = candidates[0].get("content", {}).get("parts", [])
+                            if parts:
+                                return parts[0].get("text", "").strip()
+            except Exception as e:
+                continue
 
         return ""
 

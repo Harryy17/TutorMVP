@@ -11,10 +11,11 @@ from typing import AsyncGenerator, List, Dict, Optional, Any
 from dotenv import dotenv_values
 
 CASCADE_MODELS = [
-    "gemini-3.5-flash",
     "gemini-3.5-flash-lite",
     "gemini-3.6-flash",
     "gemini-flash-latest",
+    "gemini-3.7-flash",
+    "gemini-3.5-flash",
 ]
 
 
@@ -36,7 +37,7 @@ def _get_active_gemini_model() -> str:
         model = vals.get("GEMINI_MODEL", "")
         if model and model.strip():
             return model.strip()
-    return "gemini-3.5-flash"
+    return "gemini-3.5-flash-lite"
 
 
 
@@ -61,15 +62,60 @@ class GeminiClient:
         key = self.api_key
         return bool(key and len(key.strip()) > 10 and key != "your_gemini_api_key_here")
 
-    def _format_contents(self, messages: List[Dict[str, str]]) -> List[Dict[str, Any]]:
-        contents = []
+    def _format_payload(self, messages: List[Dict[str, str]], temperature: float = 0.3) -> Dict[str, Any]:
+        system_texts = []
+        conversation_turns: List[Dict[str, Any]] = []
+
         for m in messages:
-            role = "user" if m.get("role") in ["user", "system"] else "model"
-            contents.append({
-                "role": role,
-                "parts": [{"text": m.get("content", "")}]
+            role = m.get("role", "user")
+            content = m.get("content", "")
+            if not content:
+                continue
+
+            if role == "system":
+                system_texts.append(content)
+            elif role in ["user", "human"]:
+                if conversation_turns and conversation_turns[-1]["role"] == "user":
+                    conversation_turns[-1]["parts"][0]["text"] += f"\n\n{content}"
+                else:
+                    conversation_turns.append({
+                        "role": "user",
+                        "parts": [{"text": content}]
+                    })
+            elif role in ["model", "assistant"]:
+                if conversation_turns and conversation_turns[-1]["role"] == "model":
+                    conversation_turns[-1]["parts"][0]["text"] += f"\n\n{content}"
+                else:
+                    conversation_turns.append({
+                        "role": "model",
+                        "parts": [{"text": content}]
+                    })
+
+        if not conversation_turns:
+            conversation_turns.append({
+                "role": "user",
+                "parts": [{"text": "Hello"}]
             })
-        return contents
+        elif conversation_turns[0]["role"] != "user":
+            conversation_turns.insert(0, {
+                "role": "user",
+                "parts": [{"text": "Hello"}]
+            })
+
+        payload: Dict[str, Any] = {
+            "contents": conversation_turns,
+            "generationConfig": {
+                "temperature": temperature,
+                "maxOutputTokens": 4096,
+            },
+        }
+
+        if system_texts:
+            payload["systemInstruction"] = {
+                "parts": [{"text": "\n\n".join(system_texts)}]
+            }
+
+        return payload
 
     async def chat(
         self,
@@ -82,17 +128,9 @@ class GeminiClient:
         if not key or len(key.strip()) < 10 or key == "your_gemini_api_key_here":
             return "⚠️ Gemini API key is missing. Please set your GEMINI_API_KEY in backend/.env."
 
-        # Cascade order starting from user preference
         preferred = model or self.model
         models_to_try = [preferred] + [m for m in CASCADE_MODELS if m != preferred]
-
-        payload = {
-            "contents": self._format_contents(messages),
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": 4096,
-            },
-        }
+        payload = self._format_payload(messages, temperature=temperature)
 
         last_error = None
         for target_model in models_to_try:
@@ -115,7 +153,9 @@ class GeminiClient:
                         await asyncio.sleep(0.5)
                         continue
                     else:
-                        r.raise_for_status()
+                        error_detail = r.text
+                        print(f"[GeminiClient] {target_model} returned error status {r.status_code}: {error_detail}")
+                        continue
             except Exception as e:
                 last_error = e
                 continue
@@ -137,14 +177,7 @@ class GeminiClient:
 
         preferred = model or self.model
         models_to_try = [preferred] + [m for m in CASCADE_MODELS if m != preferred]
-
-        payload = {
-            "contents": self._format_contents(messages),
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": 4096,
-            },
-        }
+        payload = self._format_payload(messages, temperature=temperature)
 
         stream_succeeded = False
         for target_model in models_to_try:

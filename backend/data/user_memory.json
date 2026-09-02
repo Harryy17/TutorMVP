@@ -1,14 +1,4 @@
 {
-  "default_user": {
-    "user_id": "default_user",
-    "name": "Student",
-    "learning_style": "intuitive_step_by_step",
-    "active_goals": [],
-    "studied_topics": [],
-    "weaknesses": [],
-    "facts": {},
-    "last_active": "2026-09-01T09:17:57.465203"
-  },
   "sreehari_ps": {
     "user_id": "sreehari_ps",
     "name": "Student",
@@ -18,14 +8,12 @@
       "Build strong conceptual foundations"
     ],
     "studied_topics": [],
-    "weaknesses": [
-      "Needs simplified analogies for Machine Learning"
-    ],
+    "weaknesses": [],
     "facts": [],
-    "last_active": "2026-09-01T09:17:57.465258"
+    "last_active": "2026-09-02T05:36:57.732518"
   },
-  "demo_user": {
-    "user_id": "demo_user",
+  "default_user": {
+    "user_id": "default_user",
     "name": "Student",
     "learning_style": "Step-by-step with clear examples",
     "active_goals": [
@@ -35,6 +23,6 @@
     "studied_topics": [],
     "weaknesses": [],
     "facts": [],
-    "last_active": "2026-09-01T12:18:08.547704"
+    "last_active": "2026-09-02T05:40:30.260968"
   }
 }

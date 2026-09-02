@@ -7,21 +7,22 @@
 }
 
 /* ─── Notebook Design Tokens ─────────────────────────────────── */
+/* ─── Modern Professional Minimalist Tokens (Cognitive Minimalist) ──── */
 :root {
-  --ink: #1B2340;
-  --ink-soft: #3B4266;
-  --ink-faint: #8892B0;
-  --paper: #F6F1E4;
-  --paper-line: #E4DCC8;
-  --paper-rule: #D9D0B8;
-  --margin-red: #C97B76;
-  --highlight: #FFD23F;
-  --highlight-soft: #FFF3C4;
-  --sage: #6B8E6E;
-  --sage-soft: #E4ECE2;
-  --coral: #E85D4E;
-  --coral-soft: #FDEDE9;
-  --white: #FFFDF8;
+  --ink: #111827;
+  --ink-soft: #4B5563;
+  --ink-faint: #9CA3AF;
+  --paper: #F9FAFB;
+  --paper-line: #E5E7EB;
+  --paper-rule: #E5E7EB;
+  --margin-red: #E5E7EB;
+  --highlight: #2563EB;
+  --highlight-soft: #EFF6FF;
+  --sage: #059669;
+  --sage-soft: #ECFDF5;
+  --coral: #DC2626;
+  --coral-soft: #FEF2F2;
+  --white: #FFFFFF;
 }
 
 * { box-sizing: border-box; }
@@ -50,8 +51,8 @@ body {
 /* ─── Scrollbar ─────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: var(--paper-rule); border-radius: 10px; }
-::-webkit-scrollbar-thumb:hover { background: #b8ae96; }
+::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 10px; }
+::-webkit-scrollbar-thumb:hover { background: #D1D5DB; }
 
 /* ─── Typing animation ───────────────────────────────────────── */
 @keyframes blink {
@@ -75,113 +76,109 @@ body {
   from { opacity: 0; transform: translateY(6px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.msg-rise { animation: rise 0.32s ease both; }
+.msg-rise { animation: rise 0.25s ease both; }
 
-/* ─── Notebook ruled background ──────────────────────────────── */
+/* ─── Clean surfaces (flat modern software) ──────────────────── */
 .notebook-lines {
-  background-image: repeating-linear-gradient(
-    to bottom,
-    transparent,
-    transparent 31px,
-    var(--paper-line) 32px
-  );
-  background-position: 0 12px;
+  background: var(--paper);
 }
 
-/* ─── Markdown content (notebook style) ─────────────────────── */
+/* ─── Markdown content (Standard Professional Inter Styling) ─── */
 .markdown-content {
-  font-size: 14.5px;
+  font-size: 15px;
   line-height: 1.65;
-  color: var(--ink);
+  color: #1F2937;
   font-family: var(--font-sans);
 }
 .markdown-content h1 {
-  font-family: var(--font-serif);
-  font-size: 1.3rem;
-  color: var(--ink);
-  font-weight: 600;
-  margin: 0.9em 0 0.35em;
-  border-bottom: 2px solid var(--highlight);
-  padding-bottom: 3px;
-  display: inline-block;
+  font-family: var(--font-sans);
+  font-size: 1.25rem;
+  color: #111827;
+  font-weight: 700;
+  margin: 1.1em 0 0.4em;
 }
 .markdown-content h2 {
-  font-family: var(--font-serif);
+  font-family: var(--font-sans);
   font-size: 1.1rem;
-  color: var(--ink);
+  color: #111827;
+  font-weight: 600;
+  margin: 0.9em 0 0.35em;
+}
+.markdown-content h3 {
+  font-family: var(--font-sans);
+  font-size: 1rem;
+  color: #374151;
   font-weight: 600;
   margin: 0.8em 0 0.3em;
 }
-.markdown-content h3 {
-  font-size: 0.98rem;
-  color: var(--ink-soft);
-  font-weight: 600;
-  margin: 0.7em 0 0.25em;
-}
-.markdown-content p { margin: 0.45em 0; }
+.markdown-content p { margin: 0.5em 0; }
 .markdown-content strong {
-  color: var(--ink);
-  font-weight: 700;
-  background: var(--highlight-soft);
-  padding: 0 2px;
-  border-radius: 2px;
+  color: #111827;
+  font-weight: 600;
+  background: transparent;
+  padding: 0;
 }
-.markdown-content em { color: var(--ink-soft); font-style: italic; }
+.markdown-content em { color: #4B5563; font-style: italic; }
 .markdown-content code {
   font-family: var(--font-mono);
-  background: var(--sage-soft);
-  border: 1px solid var(--paper-rule);
-  padding: 0.12em 0.38em;
-  border-radius: 3px;
-  font-size: 0.86em;
-  color: var(--ink);
-  font-weight: 600;
+  background: #F3F4F6;
+  border: 1px solid #E5E7EB;
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+  font-size: 0.88em;
+  color: #111827;
+  font-weight: 500;
 }
 .markdown-content pre {
-  background: var(--paper);
-  border: 1px solid var(--paper-rule);
-  border-left: 3px solid var(--margin-red);
-  border-radius: 0 4px 4px 0;
-  padding: 0.9rem 1rem;
+  background: #111827;
+  border: 1px solid #374151;
+  border-radius: 8px;
+  padding: 1rem 1.15rem;
   overflow-x: auto;
-  margin: 0.7em 0;
+  margin: 0.8em 0;
 }
 .markdown-content pre code {
   background: none; border: none; padding: 0;
-  color: var(--ink); font-size: 0.87em;
+  color: #F9FAFB; font-size: 0.88em;
 }
-.markdown-content ul, .markdown-content ol { padding-left: 1.3rem; margin: 0.45em 0; }
-.markdown-content li { margin: 0.22em 0; }
+.markdown-content ul, .markdown-content ol { padding-left: 1.4rem; margin: 0.5em 0; }
+.markdown-content li { margin: 0.25em 0; }
 .markdown-content blockquote {
-  border-left: 3px solid var(--margin-red);
-  padding: 0.5rem 1rem;
-  color: var(--ink-soft);
-  background: var(--coral-soft);
-  margin: 0.6em 0;
-  border-radius: 0 4px 4px 0;
-  font-style: italic;
+  border-left: 3px solid #3B82F6;
+  padding: 0.6rem 1rem;
+  color: #4B5563;
+  background: #F0FDF4;
+  margin: 0.7em 0;
+  border-radius: 0 6px 6px 0;
+  font-style: normal;
 }
 .markdown-content table {
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  margin: 0.9em 0;
-  font-size: 0.85rem;
-  border: 1px solid var(--paper-rule);
+  margin: 1em 0;
+  font-size: 0.875rem;
+  border: 1px solid #E5E7EB;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 4px rgba(27,35,64,0.03);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
 }
 .markdown-content th {
-  background: var(--paper);
-  padding: 0.55rem 0.8rem;
+  background: #F9FAFB;
+  padding: 0.65rem 0.85rem;
   text-align: left;
-  font-weight: 700;
-  font-family: var(--font-serif);
-  color: var(--ink);
-  border-bottom: 2px solid var(--paper-rule);
-  border-right: 1px solid var(--paper-line);
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: #111827;
+  border-bottom: 1px solid #E5E7EB;
 }
+.markdown-content td {
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid #F3F4F6;
+  color: #374151;
+}
+
+
 .markdown-content th:last-child {
   border-right: none;
 }
