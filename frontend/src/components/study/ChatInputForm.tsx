@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Send, Paperclip, Mic, MicOff, Loader2, X, FileText, Sparkles, Leaf
+  Send, Plus, Paperclip, Mic, MicOff, Loader2, X, FileText, Brain, Sparkles, AudioLines
 } from 'lucide-react'
 
 export interface ChatInputFormProps {
@@ -18,7 +18,7 @@ export default function ChatInputForm({
   onSendMessage,
   onUploadFile,
   disabled = false,
-  placeholder = 'Ask a question or upload course material...',
+  placeholder = 'Ask anything...',
   autoFocus = false,
   className = '',
   allowUpload = true,
@@ -28,6 +28,7 @@ export default function ChatInputForm({
   const [attachedFile, setAttachedFile] = useState<File | null>(null)
   const [isFocused, setIsFocused] = useState(false)
   const [isListening, setIsListening] = useState(false)
+  const [isDeepThink, setIsDeepThink] = useState(true)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -121,24 +122,16 @@ export default function ChatInputForm({
       <input
         ref={fileInputRef}
         type="file"
-        accept=".pdf,.png,.jpg,.jpeg,.txt,.docx"
+        accept=".pdf,.png,.jpg,.jpeg,.txt,.docx,.pptx"
         className="hidden"
         onChange={handleFileChange}
       />
 
-      {/* Main Nature Container */}
+      {/* Main Transparent Minimalist Pill Container */}
       <div
-        className="relative transition-all duration-300 ease-out"
-        style={{
-          background: 'var(--white, #FFFDF8)',
-          borderRadius: '16px',
-          border: isFocused
-            ? '1.5px solid var(--sage, #6B8E6E)'
-            : '1.5px solid var(--paper-rule, #D9D0B8)',
-          boxShadow: isFocused
-            ? '0 6px 24px -4px rgba(107, 142, 110, 0.18), 0 2px 8px rgba(27, 35, 64, 0.04)'
-            : '0 2px 10px rgba(27, 35, 64, 0.04)',
-        }}
+        className={`relative transition-all duration-200 ease-out bg-transparent rounded-full border px-2 py-1.5 sm:px-3 sm:py-1.5 ${
+          isFocused ? 'border-slate-800 ring-1 ring-slate-800/10' : 'border-slate-300 hover:border-slate-400'
+        }`}
       >
         {/* Attachment Pill (if file selected) */}
         <AnimatePresence>
@@ -147,22 +140,17 @@ export default function ChatInputForm({
               initial={{ opacity: 0, y: -4, height: 0 }}
               animate={{ opacity: 1, y: 0, height: 'auto' }}
               exit={{ opacity: 0, y: -4, height: 0 }}
-              className="px-3.5 pt-3 pb-1"
+              className="px-3 pt-1.5 pb-1"
             >
               <div
-                className="flex items-center justify-between gap-2 px-3 py-1.5 rounded-lg text-xs"
-                style={{
-                  background: 'var(--sage-soft, #E4ECE2)',
-                  border: '1px solid var(--sage, #6B8E6E)',
-                  color: 'var(--sage, #6B8E6E)',
-                }}
+                className="flex items-center justify-between gap-2 px-3 py-1 rounded-full text-xs bg-slate-100/90 border border-slate-200 text-slate-700"
               >
                 <div className="flex items-center gap-2 min-w-0">
-                  <FileText size={14} className="shrink-0" />
-                  <span className="font-semibold truncate max-w-[200px] sm:max-w-[320px]">
+                  <FileText size={13} className="shrink-0 text-blue-600" />
+                  <span className="font-medium truncate max-w-[200px] sm:max-w-[320px]">
                     {attachedFile.name}
                   </span>
-                  <span className="text-[11px] opacity-75 shrink-0">
+                  <span className="text-[10px] text-slate-400 shrink-0">
                     ({(attachedFile.size / (1024 * 1024)).toFixed(2)} MB)
                   </span>
                 </div>
@@ -181,34 +169,19 @@ export default function ChatInputForm({
         </AnimatePresence>
 
         {/* Text Input Row */}
-        <div className="flex items-end gap-2 px-3 py-2.5 sm:px-4 sm:py-3">
-          {/* File Attachment Button */}
+        <div className="flex items-center gap-2">
+          {/* Add / Attachment Button (+) */}
           {allowUpload && (
             <button
               type="button"
               onClick={() => fileInputRef.current?.click()}
               disabled={disabled}
-              className="flex items-center justify-center p-2 rounded-xl text-xs transition-all cursor-pointer shrink-0"
-              style={{
-                color: attachedFile ? 'var(--sage, #6B8E6E)' : 'var(--ink-soft, #3B4266)',
-                background: attachedFile ? 'var(--sage-soft, #E4ECE2)' : 'transparent',
-              }}
-              onMouseEnter={(e) => {
-                e.currentTarget.style.background = 'var(--sage-soft, #E4ECE2)'
-                e.currentTarget.style.color = 'var(--sage, #6B8E6E)'
-              }}
-              onMouseLeave={(e) => {
-                if (!attachedFile) {
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = 'var(--ink-soft, #3B4266)'
-                }
-              }}
-              title="Attach Syllabus or PDF notes"
+              className="flex items-center justify-center w-8 h-8 rounded-full text-slate-600 hover:text-black hover:bg-black/5 transition-all cursor-pointer shrink-0"
+              title="Attach Syllabus, PDF, Word or Notes"
             >
-              <Paperclip size={17} />
+              <Plus size={19} className="stroke-[2.2]" />
             </button>
           )}
-
 
           {/* Textarea Field */}
           <div className="flex-1 min-w-0">
@@ -222,82 +195,46 @@ export default function ChatInputForm({
               onFocus={() => setIsFocused(true)}
               onBlur={() => setIsFocused(false)}
               placeholder={placeholder}
-              className="w-full resize-none bg-transparent text-sm leading-relaxed outline-none border-none p-1 font-sans custom-scrollbar"
+              className="w-full resize-none bg-transparent text-sm leading-snug outline-none border-none py-1.5 px-1 font-serif text-black placeholder:text-slate-400 custom-scrollbar"
               style={{
-                color: 'var(--ink, #1B2340)',
-                minHeight: '26px',
+                minHeight: '24px',
                 maxHeight: '120px',
               }}
             />
           </div>
 
-          {/* Action Buttons: Voice & Send */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Voice Dictation Button */}
-            <button
-              type="button"
-              onClick={handleVoiceToggle}
-              disabled={disabled}
-              className={`p-2 rounded-xl transition-all cursor-pointer ${
-                isListening ? 'animate-pulse' : ''
-              }`}
-              style={{
-                background: isListening ? 'var(--coral-soft, #FBE6E2)' : 'transparent',
-                color: isListening ? 'var(--coral, #E85D4E)' : 'var(--ink-soft, #3B4266)',
-              }}
-              onMouseEnter={(e) => {
-                if (!isListening) {
-                  e.currentTarget.style.background = 'var(--paper, #F6F1E4)'
-                  e.currentTarget.style.color = 'var(--ink, #1B2340)'
-                }
-              }}
-              onMouseLeave={(e) => {
-                if (!isListening) {
-                  e.currentTarget.style.background = 'transparent'
-                  e.currentTarget.style.color = 'var(--ink-soft, #3B4266)'
-                }
-              }}
-              title={isListening ? 'Listening... click to stop' : 'Voice dictation'}
-            >
-              {isListening ? <MicOff size={16} /> : <Mic size={16} />}
-            </button>
-
-            {/* Send Button with Micro-Interaction Spring */}
-            <motion.button
-              type="button"
-              onClick={handleSend}
-              disabled={!canSubmit}
-              whileTap={{ scale: 0.94 }}
-              className={`flex items-center justify-center p-2.5 rounded-xl transition-all cursor-pointer ${
-                canSubmit
-                  ? 'shadow-sm opacity-100'
-                  : 'opacity-40 cursor-not-allowed'
-              }`}
-              style={{
-                background: canSubmit ? 'var(--ink, #1B2340)' : 'var(--paper-line, #E4DCC8)',
-                color: canSubmit ? 'var(--highlight, #FFD23F)' : 'var(--ink-soft, #3B4266)',
-              }}
-              title="Send Message (Enter)"
-            >
-              {disabled ? (
-                <Loader2 size={15} className="animate-spin text-white" />
-              ) : (
-                <Send size={15} />
-              )}
-            </motion.button>
+          {/* Right Action Control: Mic only (and Send when user enters text) */}
+          <div className="flex items-center gap-1 shrink-0 pr-1">
+            {canSubmit ? (
+              <motion.button
+                type="button"
+                onClick={handleSend}
+                disabled={disabled}
+                whileTap={{ scale: 0.92 }}
+                className="flex items-center justify-center w-8 h-8 rounded-full bg-[var(--ink)] hover:bg-slate-800 text-white shadow-xs transition-all cursor-pointer"
+                title="Send message (Enter)"
+              >
+                {disabled ? (
+                  <Loader2 size={14} className="animate-spin text-white" />
+                ) : (
+                  <Send size={14} className="ml-0.5" />
+                )}
+              </motion.button>
+            ) : (
+              <button
+                type="button"
+                onClick={handleVoiceToggle}
+                disabled={disabled}
+                className={`p-2 rounded-full text-slate-500 hover:text-black hover:bg-black/5 transition-all cursor-pointer ${
+                  isListening ? 'animate-pulse text-red-500 bg-red-50' : ''
+                }`}
+                title={isListening ? 'Listening... click to stop' : 'Voice dictation'}
+              >
+                {isListening ? <MicOff size={17} /> : <Mic size={17} />}
+              </button>
+            )}
           </div>
         </div>
-      </div>
-
-      {/* Nature Micro-Cue on Focus */}
-      <div className="flex items-center justify-between px-2 pt-1.5 text-[11px]" style={{ color: 'var(--ink-soft, #3B4266)', opacity: 0.75 }}>
-        <span className="hidden sm:inline">Press <kbd className="px-1 py-0.5 rounded bg-black/5 font-mono text-[10px]">Enter</kbd> to send, <kbd className="px-1 py-0.5 rounded bg-black/5 font-mono text-[10px]">Shift + Enter</kbd> for new line</span>
-        {isFocused && (
-          <span className="flex items-center gap-1 text-[10.5px] ml-auto font-medium" style={{ color: 'var(--sage, #6B8E6E)' }}>
-            <Leaf size={11} />
-            <span>DeepTutor Active</span>
-          </span>
-        )}
       </div>
     </div>
   )

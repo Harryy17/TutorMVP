@@ -19,21 +19,18 @@ from app.rag.vlm_client import vlm_client
 settings = get_settings()
 
 TOPIC_EXTRACTION_PROMPT = """You are an expert Academic Curriculum & Topic Reasoning Agent.
-A student has uploaded course material for the subject: "{subject}".
-
-YOUR TASK:
-Think step-by-step through the document to extract ALL IMPORTANT, high-yield topics and chapters that a student needs to master.
+Analyze the uploaded document content to identify the exact academic subject/course and extract all core learning modules.
 
 THINKING & EXTRACTION PROCESS:
-1. Document Scope: Identify the core chapters, units, or modules taught in this text (especially reviewing the Table of Contents / Syllabus if provided).
-2. High-Yield Filtering: Discard introductory boilerplate, publisher notes, and generic titles (never use titles like "Introduction", "Overview", or "Chapter 1"). Focus on real, testable concepts (e.g. "Resources and Development", "Water Resources", "Agriculture").
-3. Comprehensive Coverage: Extract ALL major chapters or units (typically 6 to 12 topics) taught in this material so the complete syllabus is represented. Do NOT omit or compress important chapters.
-4. Document your reasoning chain in "thought_process" explaining how you extracted and sequenced every core chapter.
+1. Document Scope: Detect the precise Course/Subject name (e.g. "Mathematics", "Machine Learning", "Geography", "Big Data Analytics") and Document Title (e.g. "Arithmetic Sequences & Progressions", "Introduction to Big Data", "Contemporary Geography").
+2. High-Yield Filtering: Discard introductory boilerplate, publisher notes, and generic titles (never use titles like "Introduction", "Overview", or "Chapter 1"). Focus on real, testable concepts (e.g. "Arithmetic Sequences", "HDFS & MapReduce", "Agriculture & Cropping Seasons").
+3. Comprehensive Coverage: Extract ALL major chapters or units (typically 4 to 10 topics) taught in this material.
 
 Output strictly valid JSON with this exact schema:
 {{
-  "thought_process": "Brief 1-2 sentence explanation of how you analyzed the syllabus/table of contents and selected every core chapter in prerequisite sequence.",
-  "title": "{subject} Study Plan",
+  "thought_process": "Brief 1-2 sentence explanation of how you analyzed the syllabus and selected every core chapter.",
+  "subject": "Precise Subject/Domain Name (e.g. 'Mathematics', 'Big Data', 'Geography', 'Machine Learning')",
+  "title": "Exact Course or Book Title (e.g. 'Arithmetic Sequences', 'Big Data Analytics', 'Contemporary Geography')",
   "topics": [
     {{
       "id": "topic_1",

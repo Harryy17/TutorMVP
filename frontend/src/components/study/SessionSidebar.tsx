@@ -147,7 +147,7 @@ export default function SessionSidebar({
         </div>
 
         {/* ── Sessions List ── */}
-        <div className="flex-1 overflow-y-auto custom-scrollbar p-2 space-y-1.5">
+        <div className={`flex-1 ${collapsed ? 'overflow-visible' : 'overflow-y-auto custom-scrollbar'} p-2 space-y-1.5`}>
           {!collapsed && sessions.length === 0 && (
             <div className="text-center py-10 px-3 text-xs text-[var(--ink-soft)] italic">
               No past sessions yet.
@@ -183,6 +183,51 @@ export default function SessionSidebar({
                   <BookOpen className="w-3.5 h-3.5" />
                 </div>
 
+                {/* Floating Flyout Tooltip on Hover (When Collapsed) */}
+                {collapsed && (
+                  <div className="pointer-events-none absolute left-full top-1/2 -translate-y-1/2 ml-3.5 z-50 w-64 opacity-0 translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-200 ease-out">
+                    <div
+                      className="bg-white rounded-xl p-3 border border-slate-200 shadow-2xl relative"
+                      style={{
+                        boxShadow: '0 12px 30px -4px rgba(0, 0, 0, 0.12), 0 4px 12px -2px rgba(0, 0, 0, 0.08)',
+                      }}
+                    >
+                      {/* Left pointer arrow */}
+                      <div className="absolute left-[-5px] top-1/2 -translate-y-1/2 w-2.5 h-2.5 bg-white border-l border-b border-slate-200 rotate-45" />
+
+                      <p
+                        className="text-xs font-bold text-black line-clamp-2 mb-1.5 leading-snug"
+                        style={{ fontFamily: 'var(--font-serif)' }}
+                      >
+                        {s.title || s.subject || 'Study Session'}
+                      </p>
+
+                      <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-slate-100">
+                        <span
+                          className="inline-block text-[9px] font-semibold px-2 py-0.5 rounded-full border truncate max-w-[130px]"
+                          style={{
+                            background: isActive ? '#DCFCE7' : 'var(--sage-soft)',
+                            borderColor: isActive ? '#86EFAC' : 'var(--paper-rule)',
+                            color: isActive ? '#15803D' : 'var(--ink-soft)',
+                            fontFamily: 'var(--font-mono)',
+                          }}
+                        >
+                          {s.subject || 'General'}
+                        </span>
+                        <div className="flex items-center gap-1.5 text-[10px] text-slate-400 font-mono">
+                          {s.topics_count > 0 && (
+                            <span className="flex items-center gap-0.5">
+                              <Layers className="w-2.5 h-2.5" />
+                              {s.topics_count}
+                            </span>
+                          )}
+                          <span>{formatTime(s.last_active)}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 {/* Title & Metadata (Expanded only) */}
                 {!collapsed && (
                   <div className="flex-1 min-w-0 pr-1">
@@ -202,13 +247,14 @@ export default function SessionSidebar({
 
                     <div className="flex items-center gap-1.5">
                       <span
-                        className="inline-block text-[9px] font-semibold px-1.5 py-0.2 rounded-full border"
+                        className="inline-block text-[9px] font-semibold px-1.5 py-0.5 rounded-full border truncate max-w-[140px]"
                         style={{
                           background: isActive ? '#DCFCE7' : 'var(--sage-soft)',
                           borderColor: isActive ? '#86EFAC' : 'var(--paper-rule)',
                           color: isActive ? '#15803D' : 'var(--ink-soft)',
                           fontFamily: 'var(--font-mono)',
                         }}
+                        title={s.subject || 'General'}
                       >
                         {s.subject || 'General'}
                       </span>

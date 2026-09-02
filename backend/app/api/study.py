@@ -329,10 +329,22 @@ async def upload_study_material(
 
     # Cache active study session & persist to isolated session database
     topics = extraction_result.get("topics", [])
-    session_title = extraction_result.get("title", f"{subject} Study Session")
+    extracted_subj = extraction_result.get("subject")
+    
+    # Infer clean subject and title from material
+    if extracted_subj and extracted_subj.lower() not in {"general", "general study", "general subject"}:
+        clean_subject = extracted_subj
+    elif subject and subject.lower() not in {"general", "general study", "general subject"}:
+        clean_subject = subject
+    else:
+        clean_stem = Path(file.filename).stem
+        clean_stem = re.sub(r"[_\-\(\)\d]+", " ", clean_stem).strip()
+        clean_subject = clean_stem if clean_stem else "Course Material"
+
+    session_title = extraction_result.get("title") or f"{clean_subject} Study Plan"
     session_payload = {
         "id": study_id,
-        "subject": subject,
+        "subject": clean_subject,
         "file_name": file.filename,
         "file_path": file_path,
         "topics": topics,
@@ -345,14 +357,14 @@ async def upload_study_material(
     session_manager.save_session_state(
         session_id=study_id,
         topics=topics,
-        subject=subject,
+        subject=clean_subject,
         title=session_title,
     )
 
     return {
         "success": True,
         "study_id": study_id,
-        "subject": subject,
+        "subject": clean_subject,
         "file_name": file.filename,
         "title": session_payload["title"],
         "topics": topics,

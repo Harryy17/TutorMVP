@@ -28,24 +28,24 @@
 * { box-sizing: border-box; }
 
 html {
-  font-size: 15px;
+  font-size: 15.5px;
   scroll-behavior: smooth;
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   text-rendering: optimizeLegibility;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (min-width: 640px) { html { font-size: 15.5px; } }
-@media (min-width: 1024px) { html { font-size: 16px; } }
+@media (min-width: 640px) { html { font-size: 16px; } }
+@media (min-width: 1024px) { html { font-size: 16.5px; } }
 
 body {
-  font-family: var(--font-sans);
+  font-family: var(--font-serif);
   background-color: var(--paper);
   color: var(--ink);
   min-height: 100vh;
   font-size: 1rem;
-  line-height: 1.6;
+  line-height: 1.65;
 }
 
 /* ─── Scrollbar ─────────────────────────────────────────────── */
@@ -83,31 +83,31 @@ body {
   background: var(--paper);
 }
 
-/* ─── Markdown content (Standard Professional Inter Styling) ─── */
+/* ─── Markdown content (Californian FB / Editorial Serif Styling) ─── */
 .markdown-content {
-  font-size: 15px;
-  line-height: 1.65;
-  color: #1F2937;
-  font-family: var(--font-sans);
+  font-size: 15.5px;
+  line-height: 1.7;
+  color: #000000;
+  font-family: var(--font-serif);
 }
 .markdown-content h1 {
-  font-family: var(--font-sans);
-  font-size: 1.25rem;
-  color: #111827;
+  font-family: var(--font-serif);
+  font-size: 1.35rem;
+  color: #000000;
   font-weight: 700;
   margin: 1.1em 0 0.4em;
 }
 .markdown-content h2 {
-  font-family: var(--font-sans);
-  font-size: 1.1rem;
-  color: #111827;
+  font-family: var(--font-serif);
+  font-size: 1.2rem;
+  color: #000000;
   font-weight: 600;
   margin: 0.9em 0 0.35em;
 }
 .markdown-content h3 {
-  font-family: var(--font-sans);
-  font-size: 1rem;
-  color: #374151;
+  font-family: var(--font-serif);
+  font-size: 1.05rem;
+  color: #111827;
   font-weight: 600;
   margin: 0.8em 0 0.3em;
 }

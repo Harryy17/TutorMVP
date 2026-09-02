@@ -165,9 +165,10 @@ export default function GeminiStudyChat({
     let activeSid = sessionId
     if (!activeSid) {
       try {
+        const cleanInitialTitle = subject || (text.length > 32 ? `${text.slice(0, 32).trim()}...` : text)
         const createRes = await studyApi.createSession({
-          subject: subject || text,
-          title: `${subject || text} Study Session`
+          subject: subject || 'Study Session',
+          title: cleanInitialTitle
         })
         activeSid = createRes.data.session_id
         setSessionId(activeSid)
@@ -222,10 +223,12 @@ export default function GeminiStudyChat({
       setMessages(allMsgs)
 
       if (activeSid) {
+        const cleanTitle = newSubject || subject || (text.length > 32 ? `${text.slice(0, 32).trim()}...` : text)
         studyApi.saveSessionState(activeSid, {
           messages: allMsgs,
           topics: extractedTopics,
-          subject: newSubject || subject || text,
+          subject: newSubject || subject || 'Study Session',
+          title: cleanTitle,
         }).catch(() => { })
       }
     } catch {
@@ -483,7 +486,7 @@ export default function GeminiStudyChat({
 
   // ─── INITIAL WELCOME / CONVERSATION VIEW ─────────────────────── //
   return (
-    <div className="relative h-full max-h-screen flex flex-col justify-between max-w-4xl mx-auto px-4 sm:px-6 py-4 overflow-hidden" style={{ fontFamily: 'Inter, sans-serif' }}>
+    <div className="relative h-full max-h-screen flex flex-col justify-between max-w-4xl mx-auto px-4 sm:px-6 py-4 overflow-hidden" style={{ fontFamily: 'var(--font-serif)' }}>
       {/* ── Welcome Screen ── */}
       {step === 'ask_subject' && (
         <div className="flex-1 min-h-0 flex flex-col items-center justify-center text-center overflow-y-auto custom-scrollbar px-2 py-4">
@@ -937,16 +940,18 @@ export default function GeminiStudyChat({
         </div>
       )}
 
-      {/* ── Fixed Input Bar (Single Column) ── */}
+      {/* ── Translucent Floating Input Bar (Single Column) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className="sticky bottom-4 w-full z-20 pb-2">
-          <ChatInputForm
-            onSendMessage={(txt) => handleSendMessage(txt)}
-            onUploadFile={(file, note) => handleMaterialUpload(file, note)}
-            disabled={isAgentThinking || isUploading}
-            allowUpload={true}
-            placeholder="Ask a question or attach course material PDF (📎)..."
-          />
+        <div className="sticky bottom-0 w-full z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/85 to-transparent pointer-events-none">
+          <div className="pointer-events-auto max-w-3xl mx-auto px-1">
+            <ChatInputForm
+              onSendMessage={(txt) => handleSendMessage(txt)}
+              onUploadFile={(file, note) => handleMaterialUpload(file, note)}
+              disabled={isAgentThinking || isUploading}
+              allowUpload={true}
+              placeholder="Ask anything..."
+            />
+          </div>
         </div>
       )}
     </div>
