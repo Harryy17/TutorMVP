@@ -591,7 +591,7 @@ export default function GeminiStudyChat({
               className={`flex flex-col ${m.role === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div
-                className={m.role === 'assistant' ? `relative overflow-hidden transition-all duration-300 ${currentlySpeakingMsgId === m.id ? 'ring-1.5 ring-[var(--sage)]' : ''}` : ''}
+                className={m.role === 'assistant' ? `relative w-full transition-all duration-300 ${currentlySpeakingMsgId === m.id ? 'bg-[var(--sage-soft)]/30 rounded-2xl p-4' : 'py-2 px-1'}` : ''}
                 style={m.role === 'user'
                   ? {
                     background: 'var(--white)',
@@ -603,13 +603,7 @@ export default function GeminiStudyChat({
                     color: 'var(--ink)',
                   }
                   : {
-                    background: currentlySpeakingMsgId === m.id ? 'linear-gradient(180deg, #F2F8F4 0%, var(--white) 100%)' : 'var(--white)',
-                    border: currentlySpeakingMsgId === m.id ? '1px solid var(--sage)' : '1px solid var(--paper-rule)',
-                    borderRadius: '4px 14px 14px 14px',
-                    padding: '12px 18px',
-                    maxWidth: '88%',
-                    borderLeft: currentlySpeakingMsgId === m.id ? '4px solid var(--sage)' : '3px solid var(--highlight)',
-                    boxShadow: currentlySpeakingMsgId === m.id ? '0 4px 20px rgba(74, 124, 89, 0.12)' : '0 2px 8px rgba(27,35,64,0.02)',
+                    color: 'var(--ink)',
                   }
                 }>
                 {/* Animated moving audio light beam when reading */}

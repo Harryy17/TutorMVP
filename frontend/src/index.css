@@ -2,16 +2,16 @@
 
 @theme {
   --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-serif: 'Lora', 'Georgia', serif;
+  --font-serif: 'Californian FB', 'Newsreader', 'Cormorant Garamond', 'Georgia', serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
 /* ─── Notebook Design Tokens ─────────────────────────────────── */
 /* ─── Modern Professional Minimalist Tokens (Cognitive Minimalist) ──── */
 :root {
-  --ink: #111827;
-  --ink-soft: #4B5563;
-  --ink-faint: #9CA3AF;
+  --ink: #000000;
+  --ink-soft: #1F2937;
+  --ink-faint: #6B7280;
   --paper: #F9FAFB;
   --paper-line: #E5E7EB;
   --paper-rule: #E5E7EB;
@@ -158,10 +158,11 @@ body {
   border-spacing: 0;
   margin: 1em 0;
   font-size: 0.875rem;
+  background: #FFFFFF;
   border: 1px solid #E5E7EB;
   border-radius: 8px;
   overflow: hidden;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.03);
+  box-shadow: 0 1px 2px rgba(0,0,0,0.02);
 }
 .markdown-content th {
   background: #F9FAFB;
@@ -171,24 +172,19 @@ body {
   font-family: var(--font-sans);
   color: #111827;
   border-bottom: 1px solid #E5E7EB;
+  border-right: 1px solid #E5E7EB;
 }
-.markdown-content td {
-  padding: 0.6rem 0.85rem;
-  border-bottom: 1px solid #F3F4F6;
-  color: #374151;
-}
-
-
 .markdown-content th:last-child {
   border-right: none;
 }
 .markdown-content td {
-  padding: 0.5rem 0.8rem;
-  border-bottom: 1px solid var(--paper-line);
-  border-right: 1px solid var(--paper-line);
-  color: var(--ink);
+  padding: 0.6rem 0.85rem;
+  border-bottom: 1px solid #F3F4F6;
+  border-right: 1px solid #F3F4F6;
+  color: #374151;
   vertical-align: top;
   line-height: 1.45;
+  background: #FFFFFF;
 }
 .markdown-content td:last-child {
   border-right: none;
@@ -196,8 +192,8 @@ body {
 .markdown-content tr:last-child td {
   border-bottom: none;
 }
-.markdown-content tr:nth-child(even) {
-  background: #FCFAF6;
+.markdown-content tr:nth-child(even) td {
+  background: #FAFAFA;
 }
 
 

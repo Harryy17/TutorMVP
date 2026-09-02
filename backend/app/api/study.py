@@ -187,11 +187,12 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
     # 2. Use target concept or search queries for precise FTS5 context retrieval
     search_terms = analysis.get("search_queries") or [body.message]
     search_query = " OR ".join([f'"{q}"' if " " in q else q for q in search_terms[:2]]) if search_terms else body.message
+    combined_query = f"{body.message} {search_query}".strip()
 
     if body.session_id:
         context, doc_status_note, _ = doc_processor.retrieve_context(
             doc_id=body.session_id,
-            query=search_query,
+            query=combined_query,
             top_k=6,
             session_id=body.session_id,
         )

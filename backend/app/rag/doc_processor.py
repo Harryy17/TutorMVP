@@ -645,16 +645,18 @@ class DocumentProcessor:
           - debug_metadata
         """
         doc = self._docs.get(doc_id)
-        if not doc or not doc.chunks:
-            return "", "", {"status": "no_document", "total_chunks": 0}
+        store = get_session_store(session_id or doc_id or (getattr(doc, "session_id", None) if doc else None))
 
         query_lower = query.lower().strip()
         table_keywords = {"table", "value", "compare", "how many", "number", "data", "columns", "rows", "statistic", "percent", "metric", "versus", "vs"}
         is_table_query = any(re.search(rf"\b{re.escape(kw)}\b", query_lower) for kw in table_keywords)
 
+        # Detect specific Page Number e.g. "page 22", "page number 22", "pg 22", "p. 22"
+        page_match = re.search(r"\b(?:page|pg|p\.?)\s*(?:number|no\.?)?\s*(\d+)\b", query_lower)
+        target_page = int(page_match.group(1)) if page_match else None
+
         # Detect specific Figure / Table identifiers e.g. "fig. 3.4", "figure 3.4", "fig 2", "table 1.1"
         fig_refs = re.findall(r"\b(?:fig(?:ure)?\.?\s*\d+(?:\.\d+)?|table\s*\d+(?:\.\d+)?)\b", query_lower)
-        # Also clean raw numeric identifiers like "3.4" if preceded by fig
         clean_fig_patterns = []
         for ref in fig_refs:
             num_match = re.search(r"\d+(?:\.\d+)?", ref)
@@ -662,79 +664,94 @@ class DocumentProcessor:
                 num = num_match.group(0)
                 clean_fig_patterns.append(rf"\bfig(?:ure)?\.?\s*{re.escape(num)}\b")
 
-        # Tokenize query including numbers and short domain terms (e.g. "3.4", "rf", "knn", "kul")
+        # Tokenize query including numbers and short domain terms
         query_words = set(re.findall(r"[a-z0-9]+(?:\.[a-z0-9]+)?", query_lower))
+        selected_chunks: List[DocumentChunk] = []
 
-        scored_chunks: List[Tuple[float, DocumentChunk]] = []
-
-        for chunk in doc.chunks:
-            score = 0.0
-            content_lower = chunk.content.lower()
-
-            # Exact Figure / Table reference match (Massive priority boost)
-            for pat in clean_fig_patterns:
-                if re.search(pat, content_lower):
-                    score += 30.0
-
-            # Keyword matching score
-            for word in query_words:
-                count = content_lower.count(word)
-                if count > 0:
-                    score += 1.0 + min(count * 0.5, 3.0)
-
-            # Boost table chunks if query asks about tables/values
-            if is_table_query and chunk.source_type == "table":
-                score *= 2.2
-                score += 2.0
-
-            # Boost image_caption chunks if query asks about diagram/figure/chart/graph
-            if any(w in query_lower for w in ["diagram", "figure", "chart", "graph", "plot", "image"]) and chunk.source_type == "image_caption":
-                score *= 2.2
-                score += 2.0
-
-            # Phrase exact match bonus
-            if len(query_lower) > 4 and query_lower in content_lower:
-                score += 8.0
-
-            if score > 0:
-                scored_chunks.append((score, chunk))
-
-
-        # Sort descending by relevance score
-        scored_chunks.sort(key=lambda x: x[0], reverse=True)
-        selected_chunks = [c for _, c in scored_chunks[:top_k]]
-
-        # Fallback to local SQLite FTS5 BM25 search if memory chunks are empty or no match
-        if not selected_chunks:
-            store = get_session_store(session_id or getattr(doc, "session_id", None))
-            fts_matches = store.search(doc_id=doc_id, query=query, limit=top_k)
-            for m in fts_matches:
+        # 1. If target page is specified, fetch all chunks from that exact page directly
+        if target_page is not None:
+            page_rows = store.get_page_chunks(doc_id=doc_id, page=target_page)
+            for r in page_rows:
                 selected_chunks.append(
                     DocumentChunk(
-                        chunk_id=m["chunk_id"],
-                        doc_id=m["doc_id"],
-                        page=m["page"],
-                        source_type=m["source_type"],
-                        content=m["content"],
+                        chunk_id=r["chunk_id"],
+                        doc_id=r["doc_id"],
+                        page=r["page"],
+                        source_type=r["source_type"],
+                        content=r["content"],
                     )
                 )
 
+        # 2. In-memory scoring pass if chunks are available in RAM
+        if doc and doc.chunks:
+            scored_chunks: List[Tuple[float, DocumentChunk]] = []
+            for chunk in doc.chunks:
+                score = 0.0
+                content_lower = chunk.content.lower()
 
-        if not selected_chunks and doc.chunks:
+                # Exact page boost
+                if target_page is not None and chunk.page == target_page:
+                    score += 60.0
+                elif target_page is not None and abs(chunk.page - target_page) == 1:
+                    score += 15.0
+
+                # Exact Figure / Table reference match
+                for pat in clean_fig_patterns:
+                    if re.search(pat, content_lower):
+                        score += 35.0
+
+                # Keyword matching score
+                for word in query_words:
+                    count = content_lower.count(word)
+                    if count > 0:
+                        score += 1.0 + min(count * 0.5, 3.0)
+
+                # Boost table chunks
+                if is_table_query and chunk.source_type == "table":
+                    score *= 2.5
+                    score += 3.0
+
+                # Boost image captions
+                if any(w in query_lower for w in ["diagram", "figure", "chart", "graph", "plot", "image"]) and chunk.source_type == "image_caption":
+                    score *= 2.5
+                    score += 3.0
+
+                if score > 0:
+                    scored_chunks.append((score, chunk))
+
+            scored_chunks.sort(key=lambda x: x[0], reverse=True)
+            for _, c in scored_chunks[:top_k]:
+                if not any(sc.chunk_id == c.chunk_id for sc in selected_chunks):
+                    selected_chunks.append(c)
+
+        # 3. Persistent SQLite FTS5 BM25 search fallback
+        if len(selected_chunks) < top_k:
+            fts_matches = store.search(doc_id=doc_id, query=query, limit=top_k)
+            for m in fts_matches:
+                if not any(sc.chunk_id == m["chunk_id"] for sc in selected_chunks):
+                    selected_chunks.append(
+                        DocumentChunk(
+                            chunk_id=m["chunk_id"],
+                            doc_id=m["doc_id"],
+                            page=m["page"],
+                            source_type=m["source_type"],
+                            content=m["content"],
+                        )
+                    )
+
+        if not selected_chunks and doc and doc.chunks:
             selected_chunks = doc.chunks[:3]
 
-
-        # Build formatted context block cleanly
         context_blocks = []
-        for c in selected_chunks:
-            context_blocks.append(c.content.strip())
+        for c in selected_chunks[:top_k]:
+            context_blocks.append(f"[Page {c.page} | Type: {c.source_type}]\n{c.content.strip()}")
 
         formatted_context = "\n\n".join(context_blocks)
 
 
         # Check doc status
         status_note = ""
-        if doc.status in {"processing_text", "text_ready", "processing_enrichment"}:
+        if doc and doc.status in {"processing_text", "text_ready", "processing_enrichment"}:
             status_note = (
                 "Note: This document is still processing its tables/images — "
                 "I can answer from the text for now, and give you a fuller answer in a moment."
@@ -742,8 +759,8 @@ class DocumentProcessor:
 
         metadata = {
             "doc_id": doc_id,
-            "status": doc.status,
-            "total_chunks": len(doc.chunks),
+            "status": doc.status if doc else "unknown",
+            "total_chunks": len(doc.chunks) if doc else 0,
             "retrieved_count": len(selected_chunks),
             "source_types_retrieved": list({c.source_type for c in selected_chunks}),
         }

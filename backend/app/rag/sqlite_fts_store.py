@@ -124,6 +124,31 @@ class SQLiteFTSStore:
         finally:
             conn.close()
 
+    def get_page_chunks(self, doc_id: str, page: int) -> List[Dict[str, Any]]:
+        """Retrieves all chunks directly for a specific page number."""
+        conn = self._get_connection()
+        try:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT chunk_id, doc_id, page, source_type, content
+                FROM document_fts
+                WHERE doc_id = ? AND page = ?
+                ORDER BY rowid ASC
+            """, (doc_id, page))
+            rows = cursor.fetchall()
+            return [
+                {
+                    "chunk_id": row["chunk_id"],
+                    "doc_id": row["doc_id"],
+                    "page": row["page"],
+                    "source_type": row["source_type"],
+                    "content": row["content"],
+                }
+                for row in rows
+            ]
+        finally:
+            conn.close()
+
 
     @staticmethod
     def _sanitize_fts_query(query: str) -> str:
