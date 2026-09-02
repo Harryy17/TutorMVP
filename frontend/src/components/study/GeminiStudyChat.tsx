@@ -68,13 +68,20 @@ const STARTER_SUGGESTIONS = [
 
 const getDisplayChatText = (m: Message): string => {
   if (!m.text) return ''
-  if (!m.quizData) return m.text
-
-  // When quizData is present, clean out duplicated Question labels, option bullets (A) ... B) ...), and "Type your answer..." prompt
   let cleaned = m.text
-  cleaned = cleaned.replace(/(?:^|\n)\s*\**Question\s+\d+\s*(?:of\s+\d+|:)[^\n]*/gi, '')
-  cleaned = cleaned.replace(/(?:^|\n)\s*[-*]?\s*[A-D]\)\s+[^\n]*/gi, '')
-  cleaned = cleaned.replace(/(?:^|\n)\s*(?:Type|Reply with|Enter)\s+(?:your\s+)?answer[^\n]*/gi, '')
+
+  // Strip all book emojis and icons
+  cleaned = cleaned.replace(/[\u{1F4DA}\u{1F4D6}\u{1F4D5}\u{1F4D7}\u{1F4D8}\u{1F4D9}\u{1F4D1}\u{1F4D2}\u{1F4D3}\u{1F4D4}]/gu, '')
+  cleaned = cleaned.replace(/[📚📖📕📗📘📙📓📔📑]/g, '')
+  cleaned = cleaned.replace(/^###\s+[📚📖📕📗📘📙📓📔📑]?\s*/gm, '### ')
+
+  if (m.quizData) {
+    // When quizData is present, clean out duplicated Question labels, option bullets (A) ... B) ...), and "Type your answer..." prompt
+    cleaned = cleaned.replace(/(?:^|\n)\s*\**Question\s+\d+\s*(?:of\s+\d+|:)[^\n]*/gi, '')
+    cleaned = cleaned.replace(/(?:^|\n)\s*[-*]?\s*[A-D]\)\s+[^\n]*/gi, '')
+    cleaned = cleaned.replace(/(?:^|\n)\s*(?:Type|Reply with|Enter)\s+(?:your\s+)?answer[^\n]*/gi, '')
+  }
+
   cleaned = cleaned.replace(/\n{2,}/g, '\n\n')
   return cleaned.trim()
 }
@@ -468,7 +475,7 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `###  Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic below:`,
+          text: `### Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have analyzed **${file.name}** and structured your course into **${topics.length} core learning modules**. You can explore any topic below:`,
           isAnalyzing: false,
           topics: topics,
           thoughtProcess: thoughtProcess || `Analyzed ${file.name}, identified ${topics.length} core high-yield topics.`,
@@ -853,7 +860,7 @@ export default function GeminiStudyChat({
                   <Menu size={16} />
                 </button>
               )}
-              <BookOpen size={13} className="shrink-0" style={{ color: 'var(--margin-red)' }} />
+              <Sparkles size={12} className="shrink-0" style={{ color: 'var(--margin-red)' }} />
               <span className="truncate max-w-[150px] sm:max-w-xs md:max-w-md" style={{ fontFamily: 'var(--font-serif)', fontStyle: 'italic', fontSize: '0.85rem', color: 'var(--ink-soft)' }}>
                 {subject ? subject : 'Study Session'}
               </span>
