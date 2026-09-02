@@ -28,7 +28,7 @@
 * { box-sizing: border-box; }
 
 html {
-  font-size: 15.5px;
+  font-size: 16.5px;
   scroll-behavior: smooth;
   font-family: var(--font-serif);
   text-rendering: optimizeLegibility;
@@ -36,8 +36,16 @@ html {
   -moz-osx-font-smoothing: grayscale;
 }
 
-@media (min-width: 640px) { html { font-size: 16px; } }
-@media (min-width: 1024px) { html { font-size: 16.5px; } }
+@media (min-width: 640px) { html { font-size: 17px; } }
+@media (min-width: 1024px) { html { font-size: 17.5px; } }
+
+h1, h2, h3, h4, h5, h6 {
+  text-rendering: geometricPrecision;
+  letter-spacing: -0.022em;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
 
 body {
   font-family: var(--font-serif);
@@ -108,31 +116,43 @@ body {
 
 /* ─── Markdown content (Californian FB / Editorial Serif Styling) ─── */
 .markdown-content {
-  font-size: 15.5px;
+  font-size: 16.5px;
   line-height: 1.7;
   color: #000000;
   font-family: var(--font-serif);
 }
 .markdown-content h1 {
   font-family: var(--font-serif);
-  font-size: 1.35rem;
+  font-size: 1.45rem;
   color: #000000;
-  font-weight: 700;
-  margin: 1.1em 0 0.4em;
+  font-weight: 750;
+  letter-spacing: -0.028em;
+  line-height: 1.25;
+  margin: 1.2em 0 0.45em;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 .markdown-content h2 {
   font-family: var(--font-serif);
-  font-size: 1.2rem;
-  color: #000000;
-  font-weight: 600;
-  margin: 0.9em 0 0.35em;
+  font-size: 1.25rem;
+  color: #050505;
+  font-weight: 700;
+  letter-spacing: -0.022em;
+  line-height: 1.3;
+  margin: 1.1em 0 0.4em;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 .markdown-content h3 {
   font-family: var(--font-serif);
-  font-size: 1.05rem;
+  font-size: 1.1rem;
   color: #111827;
-  font-weight: 600;
-  margin: 0.8em 0 0.3em;
+  font-weight: 700;
+  letter-spacing: -0.018em;
+  line-height: 1.35;
+  margin: 0.9em 0 0.35em;
+  text-rendering: geometricPrecision;
+  -webkit-font-smoothing: antialiased;
 }
 .markdown-content p { margin: 0.5em 0; }
 .markdown-content strong {

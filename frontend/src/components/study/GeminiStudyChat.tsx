@@ -19,6 +19,7 @@ import ChatInputForm from './ChatInputForm'
 import MarkdownArtifactViewer from './MarkdownArtifactViewer'
 import { studyApi } from '../../services/api'
 import { cleanAcademicText } from '../../utils/textFormatter'
+import { exportNotesToPdf } from '../../utils/exportPdf'
 
 
 export interface QuizData {
@@ -100,9 +101,12 @@ export default function GeminiStudyChat({
   const [spokenWordIndex, setSpokenWordIndex] = useState<number | null>(null)
   const [speechWords, setSpeechWords] = useState<string[]>([])
   const speechIntervalRef = useRef<any>(null)
+  const currentUtteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
+  const speechCancelRef = useRef<boolean>(false)
   const [showScrollBottom, setShowScrollBottom] = useState(false)
   const [isDownloadingMd, setIsDownloadingMd] = useState<string | null>(null)
   const [activeArtifact, setActiveArtifact] = useState<{ title: string; markdown: string } | null>(null)
+  const [viewerPosition, setViewerPosition] = useState<'left' | 'right'>('right')
 
   const isStudyNotesMessage = (m: Message): boolean => {
     if (m.role !== 'assistant') return false
@@ -119,6 +123,26 @@ export default function GeminiStudyChat({
     const h1Match = m.text.match(/^#\s+(.*?)(?:\s+—\s+Study Notes)?$/m)
     if (h1Match && h1Match[1]) return h1Match[1].trim()
     return subject || 'Study Notes'
+  }
+
+  const getStudyNotesChatIntro = (m: Message): string => {
+    const text = m.text || ''
+    let topic = subject || 'this topic'
+    const h1Match = text.match(/^#\s+(.*?)(?:\s+—\s+Study Notes)?$/m)
+    if (h1Match && h1Match[1]) topic = h1Match[1].trim()
+
+    const buildsOnMatch = text.match(/\*Builds on:\s*(.*?)\*/i)
+    const buildsOn = buildsOnMatch ? buildsOnMatch[1].trim() : ''
+
+    const h2Matches = Array.from(text.matchAll(/##\s+\d*\.?\s*([^\n]+)/g))
+      .map(match => match[1].replace(/Quick-Reference Glossary/i, '').trim())
+      .filter(Boolean)
+    const keyHighlights = h2Matches.slice(0, 3).join(', ')
+
+    let intro = `I built these notes on top of what you've already studied${buildsOn ? ` (${buildsOn})` : ''}, focusing on the core principles, ${keyHighlights ? keyHighlights.toLowerCase() + ', ' : ''}practical applications, comparison tables, and a quick-reference glossary at the end for quick lookup.`
+
+    intro += `\n\nLet me know if you'd like this turned into flashcards or a quiz to test yourself on it.`
+    return intro
   }
 
   const fileInputRef = useRef<HTMLInputElement>(null)
@@ -534,16 +558,20 @@ export default function GeminiStudyChat({
 
     // If currently speaking this message, toggle off
     if (currentlySpeakingMsgId === msgId) {
-      if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
+      speechCancelRef.current = true
+      if (speechIntervalRef.current) clearTimeout(speechIntervalRef.current)
       window.speechSynthesis.cancel()
+      currentUtteranceRef.current = null
       setCurrentlySpeakingMsgId(null)
       setSpokenWordIndex(null)
       return
     }
 
     // Cancel any previous speech
-    if (speechIntervalRef.current) clearInterval(speechIntervalRef.current)
+    speechCancelRef.current = false
+    if (speechIntervalRef.current) clearTimeout(speechIntervalRef.current)
     window.speechSynthesis.cancel()
+    window.speechSynthesis.resume()
 
     // Clean text for natural speech synthesis
     let speechText = rawText || ''
@@ -558,81 +586,178 @@ export default function GeminiStudyChat({
     }
 
     speechText = speechText
-      .replace(/```[\s\S]*?```/g, '') // remove code blocks
-      .replace(/`([^`]+)`/g, '$1')     // inline code
-      .replace(/\[Source:[^\]]*\]/gi, '')
-      .replace(/\$([^\$]+)\$/g, '$1')   // inline math
-      .replace(/[*_#~>]/g, '')          // markdown characters
+      .replace(/```[\s\S]*?```/g, ' ')
+      .replace(/`([^`]+)`/g, '$1')
+      .replace(/\[Source:[^\]]*\]/gi, ' ')
+      .replace(/\$([^\$]+)\$/g, '$1')
+      .replace(/[*_#~>]/g, '')
       .replace(/- \*\*/g, '')
+      .replace(/^#+\s+/gm, '')
       .replace(/\s+/g, ' ')
       .trim()
 
     if (!speechText) return
 
-    // Pre-calculate exact character span ranges for every word in speechText
-    const spans: { word: string; start: number; end: number }[] = []
-    const wordRegex = /\S+/g
-    let match: RegExpExecArray | null
-    while ((match = wordRegex.exec(speechText)) !== null) {
-      spans.push({
-        word: match[0],
-        start: match.index,
-        end: match.index + match[0].length,
-      })
+    // Split into sentences so Chromium never resets charIndex or drops boundaries
+    const rawSentenceList = speechText
+      .replace(/([.!?])\s+/g, '$1\n')
+      .split('\n')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0)
+
+    const sentenceList = rawSentenceList.length > 0 ? rawSentenceList : [speechText]
+
+    interface SentenceChunk {
+      text: string
+      words: string[]
+      spans: { word: string; start: number; end: number }[]
+      wordOffset: number
     }
 
-    const words = spans.map((s) => s.word)
-    setSpeechWords(words)
-    setSpokenWordIndex(0)
+    const chunks: SentenceChunk[] = []
+    const allWords: string[] = []
+    let cumulativeCount = 0
 
-    const utterance = new SpeechSynthesisUtterance(speechText)
-    utterance.rate = 0.95
-    utterance.pitch = 1.0
-
-    // Prefer natural English voices
-    const voices = window.speechSynthesis.getVoices()
-    const naturalVoice = voices.find((v) =>
-      (v.name.includes('Natural') || v.name.includes('Google') || v.name.includes('Samantha') || v.name.includes('Jenny') || v.name.includes('Guy')) &&
-      v.lang.startsWith('en')
-    ) || voices.find((v) => v.lang.startsWith('en'))
-
-    if (naturalVoice) {
-      utterance.voice = naturalVoice
-    }
-
-    utterance.onstart = () => {
-      setCurrentlySpeakingMsgId(msgId)
-      setSpokenWordIndex(0)
-    }
-
-    utterance.onboundary = (event: any) => {
-      if (typeof event.charIndex === 'number') {
-        const charIdx = event.charIndex
-        // Find exact word span corresponding to current character index
-        let targetIdx = spans.findIndex((s) => charIdx >= s.start && charIdx <= s.end)
-        if (targetIdx === -1) {
-          for (let i = 0; i < spans.length; i++) {
-            if (spans[i].start >= charIdx) {
-              targetIdx = i
-              break
-            }
-          }
-          if (targetIdx === -1) targetIdx = spans.length - 1
-        }
-        setSpokenWordIndex(targetIdx)
+    for (const sent of sentenceList) {
+      const sWords: string[] = []
+      const sSpans: { word: string; start: number; end: number }[] = []
+      const wordRegex = /\S+/g
+      let m: RegExpExecArray | null
+      while ((m = wordRegex.exec(sent)) !== null) {
+        sWords.push(m[0])
+        sSpans.push({
+          word: m[0],
+          start: m.index,
+          end: m.index + m[0].length,
+        })
+      }
+      if (sWords.length > 0) {
+        chunks.push({
+          text: sent,
+          words: sWords,
+          spans: sSpans,
+          wordOffset: cumulativeCount,
+        })
+        allWords.push(...sWords)
+        cumulativeCount += sWords.length
       }
     }
 
-    utterance.onend = () => {
-      setCurrentlySpeakingMsgId(null)
-      setSpokenWordIndex(null)
-    }
-    utterance.onerror = () => {
-      setCurrentlySpeakingMsgId(null)
-      setSpokenWordIndex(null)
+    if (chunks.length === 0 || allWords.length === 0) return
+
+    setSpeechWords(allWords)
+    setSpokenWordIndex(0)
+    setCurrentlySpeakingMsgId(msgId)
+
+    const voices = window.speechSynthesis.getVoices()
+    const preferredVoice = voices.find((v) =>
+      v.lang.startsWith('en') &&
+      (v.name.includes('Natural') || v.name.includes('Online') || v.name.includes('Google') || v.name.includes('Jenny') || v.name.includes('Guy') || v.name.includes('Aria'))
+    ) || voices.find((v) => v.lang.startsWith('en') && !v.name.includes('Desktop')) || voices.find((v) => v.lang.startsWith('en'))
+
+    const playSentence = (idx: number) => {
+      if (speechCancelRef.current || idx >= chunks.length) {
+        if (speechIntervalRef.current) clearTimeout(speechIntervalRef.current)
+        currentUtteranceRef.current = null
+        setCurrentlySpeakingMsgId(null)
+        setSpokenWordIndex(null)
+        return
+      }
+
+      const chunk = chunks[idx]
+      const utterance = new SpeechSynthesisUtterance(chunk.text)
+      utterance.rate = 0.95
+      utterance.pitch = 1.0
+      if (preferredVoice) utterance.voice = preferredVoice
+      currentUtteranceRef.current = utterance
+
+      let localWordIdx = 0
+
+      // Word-by-word progression timer that keeps animation moving in real time
+      const scheduleNextWord = (fromIdx: number) => {
+        if (speechCancelRef.current) return
+        if (fromIdx >= chunk.words.length) return
+
+        const currentWord = chunk.words[fromIdx] || ''
+        const cleanLen = Math.max(1, currentWord.replace(/[^\w]/g, '').length)
+        let delay = 210 + cleanLen * 26
+        if (currentWord.includes(',') || currentWord.includes(';') || currentWord.includes(':') || currentWord.includes('—')) {
+          delay += 160
+        }
+
+        speechIntervalRef.current = setTimeout(() => {
+          if (speechCancelRef.current) return
+          const nextIdx = fromIdx + 1
+          if (nextIdx < chunk.words.length) {
+            localWordIdx = nextIdx
+            setSpokenWordIndex(chunk.wordOffset + nextIdx)
+            scheduleNextWord(nextIdx)
+          }
+        }, delay)
+      }
+
+      utterance.onstart = () => {
+        if (speechCancelRef.current) return
+        setCurrentlySpeakingMsgId(msgId)
+        localWordIdx = 0
+        setSpokenWordIndex(chunk.wordOffset + 0)
+        scheduleNextWord(0)
+      }
+
+      utterance.onboundary = (event: any) => {
+        // Ignore sentence boundaries - only react to word boundaries
+        if (event.name && event.name !== 'word') {
+          return
+        }
+
+        if (typeof event.charIndex === 'number') {
+          const charIdx = event.charIndex
+          let localIdx = -1
+          for (let i = 0; i < chunk.spans.length; i++) {
+            if (charIdx >= chunk.spans[i].start && charIdx <= chunk.spans[i].end) {
+              localIdx = i
+              break
+            }
+            if (charIdx < chunk.spans[i].start) {
+              localIdx = i
+              break
+            }
+          }
+          if (localIdx === -1) localIdx = chunk.spans.length - 1
+
+          localWordIdx = localIdx
+          setSpokenWordIndex(chunk.wordOffset + localIdx)
+          if (speechIntervalRef.current) clearTimeout(speechIntervalRef.current)
+          scheduleNextWord(localIdx)
+        }
+      }
+
+      utterance.onend = () => {
+        if (speechIntervalRef.current) clearTimeout(speechIntervalRef.current)
+        if (!speechCancelRef.current && idx + 1 < chunks.length) {
+          playSentence(idx + 1)
+        } else {
+          currentUtteranceRef.current = null
+          setCurrentlySpeakingMsgId(null)
+          setSpokenWordIndex(null)
+        }
+      }
+
+      utterance.onerror = () => {
+        if (speechIntervalRef.current) clearTimeout(speechIntervalRef.current)
+        if (!speechCancelRef.current && idx + 1 < chunks.length) {
+          playSentence(idx + 1)
+        } else {
+          currentUtteranceRef.current = null
+          setCurrentlySpeakingMsgId(null)
+          setSpokenWordIndex(null)
+        }
+      }
+
+      window.speechSynthesis.speak(utterance)
     }
 
-    window.speechSynthesis.speak(utterance)
+    playSentence(0)
   }
 
 
@@ -710,7 +835,7 @@ export default function GeminiStudyChat({
 
       {/* ── Active Conversation Screen (Before Materials) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className="w-full h-full flex flex-row overflow-hidden relative">
+        <div className={`w-full h-full flex ${viewerPosition === 'left' ? 'flex-row-reverse' : 'flex-row'} overflow-hidden relative`}>
           <div
             ref={chatContainerRef}
             onScroll={handleScroll}
@@ -800,40 +925,118 @@ export default function GeminiStudyChat({
 
                 {getDisplayChatText(m) && (
                   currentlySpeakingMsgId === m.id && speechWords.length > 0 ? (
-                    <div className="text-[15.5px] leading-[1.75] font-serif text-black py-1 select-none">
-                      {speechWords.map((word, wIdx) => {
-                        const isCurrent = wIdx === spokenWordIndex
-                        return (
-                          <span
-                            key={wIdx}
-                            className={
-                              isCurrent
-                                ? 'bg-amber-200/90 text-black font-semibold rounded-sm px-1 py-0.5 shadow-2xs transition-colors duration-150'
-                                : 'text-black'
-                            }
-                          >
-                            {word}{' '}
-                          </span>
-                        )
-                      })}
+                    <div className="space-y-3.5">
+                      <div className="text-[16.5px] leading-[1.85] font-serif text-slate-900 py-1 select-none flex flex-wrap gap-y-1 items-center">
+                        {speechWords.map((word, wIdx) => {
+                          const isCurrent = wIdx === spokenWordIndex
+                          const isPast = spokenWordIndex !== null && wIdx < spokenWordIndex
+                          return (
+                            <span
+                              key={wIdx}
+                              className={`inline-block mr-1.5 transition-all duration-150 rounded-md ${
+                                isCurrent
+                                  ? 'bg-amber-300 text-slate-950 font-bold px-1.5 py-0.5 shadow-xs ring-2 ring-amber-400/60 scale-105'
+                                  : isPast
+                                  ? 'text-slate-900 font-medium'
+                                  : 'text-slate-400 opacity-75'
+                              }`}
+                            >
+                              {word}
+                            </span>
+                          )
+                        })}
+                      </div>
+
+                      {/* If study notes, also keep the box card visible while reading */}
+                      {isStudyNotesMessage(m) && (
+                        <div
+                          onClick={() => setActiveArtifact({ title: getStudyNotesTitle(m), markdown: m.text })}
+                          className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs transition-all cursor-pointer group flex items-center justify-between gap-3 max-w-md select-none active:scale-[0.99]"
+                          title="Click to open study notes in viewer"
+                        >
+                          <div className="flex items-center gap-3.5 min-w-0">
+                            <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0 border border-slate-200 group-hover:bg-slate-200 group-hover:scale-105 transition-all">
+                              <FileText size={20} className="text-slate-700" />
+                            </div>
+                            <div className="min-w-0">
+                              <h4 className="font-semibold text-sm text-slate-900 truncate group-hover:text-emerald-700 transition-colors">
+                                {getStudyNotesTitle(m)}
+                              </h4>
+                              <p className="text-xs text-slate-500 mt-0.5">Document · MD</p>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              type="button"
+                              onClick={() => handleDownloadStudyNotes(m)}
+                              disabled={isDownloadingMd === m.id}
+                              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1 transition-all cursor-pointer shadow-2xs hover:border-slate-300 active:scale-95"
+                              title="Download as Markdown (.md)"
+                            >
+                              <FileText size={12} className="text-slate-500" />
+                              <span>{isDownloadingMd === m.id ? 'Saving...' : 'MD'}</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => exportNotesToPdf(getStudyNotesTitle(m), undefined)}
+                              className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 transition-all cursor-pointer shadow-2xs hover:border-emerald-400 active:scale-95"
+                              title="Download as PDF (.pdf)"
+                            >
+                              <Download size={12} className="text-emerald-700" />
+                              <span>PDF</span>
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   ) : isStudyNotesMessage(m) ? (
-                    <div className="mt-1 mb-3 p-5 sm:p-7 rounded-2xl border border-slate-200/90 bg-white/95 shadow-xs markdown-content relative study-notes-card">
-                        <div className="flex items-center justify-between pb-3 mb-4 border-b border-slate-100 text-xs text-slate-500 font-sans select-none">
-                          <div className="flex items-center gap-2">
-                            <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block animate-pulse" />
-                            <span className="font-semibold uppercase tracking-wider text-[11px] text-slate-700">Study Notes Reference</span>
+                    <div className="space-y-3.5">
+                      {/* Conversational Intro Text Matching Claude */}
+                      <div className="text-[14.5px] leading-relaxed text-slate-800 markdown-content">
+                        <ReactMarkdown>{getStudyNotesChatIntro(m)}</ReactMarkdown>
+                      </div>
+
+                      {/* Claude-style Document Box Card */}
+                      <div
+                        onClick={() => setActiveArtifact({ title: getStudyNotesTitle(m), markdown: m.text })}
+                        className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-white hover:border-slate-300 hover:shadow-xs transition-all cursor-pointer group flex items-center justify-between gap-3 max-w-md select-none active:scale-[0.99]"
+                        title="Click to open study notes in viewer"
+                      >
+                        <div className="flex items-center gap-3.5 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center text-slate-700 shrink-0 border border-slate-200 group-hover:bg-slate-200 group-hover:scale-105 transition-all">
+                            <FileText size={20} className="text-slate-700" />
                           </div>
+                          <div className="min-w-0">
+                            <h4 className="font-semibold text-sm text-slate-900 truncate group-hover:text-emerald-700 transition-colors">
+                              {getStudyNotesTitle(m)}
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">Document · MD</p>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
                           <button
                             type="button"
-                            onClick={() => setActiveArtifact({ title: getStudyNotesTitle(m), markdown: m.text })}
-                            className="text-[11px] text-emerald-600 hover:text-emerald-700 font-medium cursor-pointer hover:underline flex items-center gap-1"
+                            onClick={() => handleDownloadStudyNotes(m)}
+                            disabled={isDownloadingMd === m.id}
+                            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1 transition-all cursor-pointer shadow-2xs hover:border-slate-300 active:scale-95"
+                            title="Download as Markdown (.md)"
                           >
-                            <Maximize2 size={11} />
-                            <span>Open Side Viewer</span>
+                            <FileText size={12} className="text-slate-500" />
+                            <span>{isDownloadingMd === m.id ? 'Saving...' : 'MD'}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => exportNotesToPdf(getStudyNotesTitle(m), undefined)}
+                            className="px-2.5 py-1.5 text-xs font-semibold rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 transition-all cursor-pointer shadow-2xs hover:border-emerald-400 active:scale-95"
+                            title="Download as PDF (.pdf)"
+                          >
+                            <Download size={12} className="text-emerald-700" />
+                            <span>PDF</span>
                           </button>
                         </div>
-                        <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{getDisplayChatText(m)}</ReactMarkdown>
+                      </div>
                     </div>
                   ) : (
                     <div className={m.role === 'user' ? 'text-[14px] leading-relaxed text-[#1B2340]' : 'markdown-content'}>
@@ -1020,7 +1223,7 @@ export default function GeminiStudyChat({
                   {/* Speaker Button with Natural Wave Animation */}
                   <button
                     type="button"
-                    onClick={() => handleToggleSpeak(m.id, m.text, m.quizData)}
+                    onClick={() => handleToggleSpeak(m.id, isStudyNotesMessage(m) ? getStudyNotesChatIntro(m) : m.text, m.quizData)}
                     className="flex items-center gap-1.5 text-xs font-medium cursor-pointer transition-all px-2.5 py-1 rounded-full shadow-2xs group"
                     style={{
                       background: currentlySpeakingMsgId === m.id ? 'var(--sage-soft)' : 'var(--white)',
@@ -1142,6 +1345,8 @@ export default function GeminiStudyChat({
           onClose={() => setActiveArtifact(null)}
           title={activeArtifact?.title || ''}
           markdown={activeArtifact?.markdown || ''}
+          position={viewerPosition}
+          onTogglePosition={() => setViewerPosition(p => p === 'left' ? 'right' : 'left')}
           onDownload={() => {
             if (activeArtifact) {
               const dummyMsg: Message = { id: 'art_dl', role: 'assistant', text: activeArtifact.markdown }
@@ -1155,7 +1360,13 @@ export default function GeminiStudyChat({
 
       {/* ── Floating Translucent Input Bar (Floating Over the Scrolling Text) ── */}
       {(step === 'conversing' || step === 'topics_ready' || step === 'analyzing') && (
-        <div className={`absolute bottom-0 left-0 ${activeArtifact ? 'right-auto w-full lg:w-[calc(100%-500px)] xl:w-[calc(100%-560px)]' : 'right-0'} z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/60 to-transparent pointer-events-none transition-all duration-300`}>
+        <div className={`absolute bottom-0 ${
+          activeArtifact
+            ? viewerPosition === 'left'
+              ? 'right-0 left-auto w-full lg:w-[calc(100%-500px)] xl:w-[calc(100%-560px)]'
+              : 'left-0 right-auto w-full lg:w-[calc(100%-500px)] xl:w-[calc(100%-560px)]'
+            : 'left-0 right-0'
+        } z-20 pb-3 pt-6 bg-gradient-to-t from-[var(--paper)] via-[var(--paper)]/60 to-transparent pointer-events-none transition-all duration-300`}>
           {/* Scroll to Bottom Quick Button */}
           <AnimatePresence>
             {showScrollBottom && (

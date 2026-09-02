@@ -2,12 +2,13 @@ import React, { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FileText, Download, Copy, Check, Maximize2, Minimize2,
-  X, Code2, Sparkles, BookOpen
+  X, Code2, Sparkles, BookOpen, PanelLeft, PanelRight, ChevronDown
 } from 'lucide-react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import { exportNotesToPdf } from '../../utils/exportPdf'
 
 interface MarkdownArtifactViewerProps {
   isOpen: boolean
@@ -16,6 +17,8 @@ interface MarkdownArtifactViewerProps {
   markdown: string
   onDownload: () => void
   isDownloading?: boolean
+  position?: 'left' | 'right'
+  onTogglePosition?: () => void
 }
 
 export default function MarkdownArtifactViewer({
@@ -25,10 +28,13 @@ export default function MarkdownArtifactViewer({
   markdown,
   onDownload,
   isDownloading = false,
+  position = 'right',
+  onTogglePosition,
 }: MarkdownArtifactViewerProps) {
   const [copied, setCopied] = useState(false)
   const [isExpanded, setIsExpanded] = useState(false)
   const [activeTab, setActiveTab] = useState<'preview' | 'source'>('preview')
+  const [isDownloadMenuOpen, setIsDownloadMenuOpen] = useState(false)
 
   if (!isOpen) return null
 
@@ -47,11 +53,13 @@ export default function MarkdownArtifactViewer({
   return (
     <AnimatePresence>
       <motion.div
-        initial={{ opacity: 0, x: 40 }}
+        initial={{ opacity: 0, x: position === 'left' ? -40 : 40 }}
         animate={{ opacity: 1, x: 0 }}
-        exit={{ opacity: 0, x: 40 }}
+        exit={{ opacity: 0, x: position === 'left' ? -40 : 40 }}
         transition={{ type: 'spring', damping: 26, stiffness: 280 }}
-        className={`h-full flex flex-col bg-white border-l border-slate-200 shadow-xl transition-all duration-300 z-30 ${
+        className={`h-full flex flex-col bg-white ${
+          position === 'left' ? 'border-r' : 'border-l'
+        } border-slate-200 shadow-xl transition-all duration-300 z-30 ${
           isExpanded
             ? 'fixed inset-0 sm:inset-y-0 sm:right-0 sm:left-auto sm:w-[85vw] md:w-[75vw] lg:w-[65vw] xl:w-[60vw]'
             : 'w-full lg:w-[500px] xl:w-[560px]'
@@ -121,17 +129,56 @@ export default function MarkdownArtifactViewer({
               )}
             </button>
 
-            {/* Download Button */}
-            <button
-              type="button"
-              onClick={onDownload}
-              disabled={isDownloading}
-              className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95 disabled:opacity-50"
-              title="Download .md file"
-            >
-              <Download size={13} className="text-emerald-700" />
-              <span>{isDownloading ? 'Saving...' : 'Download'}</span>
-            </button>
+            {/* Download Dropdown (MD & PDF) */}
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsDownloadMenuOpen(!isDownloadMenuOpen)}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-semibold bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 shadow-2xs transition-all cursor-pointer active:scale-95"
+                title="Download options"
+              >
+                <Download size={13} className="text-emerald-700" />
+                <span>Export</span>
+                <ChevronDown size={11} className="text-emerald-600" />
+              </button>
+
+              {isDownloadMenuOpen && (
+                <div
+                  className="absolute right-0 top-full mt-1.5 w-44 bg-white rounded-xl shadow-lg border border-slate-200 py-1.5 z-50 text-xs select-none"
+                  onClick={() => setIsDownloadMenuOpen(false)}
+                >
+                  <button
+                    type="button"
+                    onClick={onDownload}
+                    disabled={isDownloading}
+                    className="w-full text-left px-3 py-2 hover:bg-slate-50 flex items-center gap-2 text-slate-700 hover:text-slate-900 cursor-pointer"
+                  >
+                    <FileText size={13} className="text-slate-500" />
+                    <span>Download as .md</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => exportNotesToPdf(cleanTitle, 'artifact-viewer-canvas')}
+                    className="w-full text-left px-3 py-2 hover:bg-emerald-50/50 flex items-center gap-2 text-emerald-700 hover:text-emerald-900 font-medium cursor-pointer"
+                  >
+                    <Download size={13} className="text-emerald-600" />
+                    <span>Download as PDF</span>
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Dock Position Toggle (Left / Right) */}
+            {onTogglePosition && (
+              <button
+                type="button"
+                onClick={onTogglePosition}
+                className="p-1.5 rounded-lg text-slate-500 hover:text-slate-800 hover:bg-slate-100 transition-colors cursor-pointer hidden sm:flex"
+                title={position === 'left' ? 'Move viewer to right side' : 'Move viewer to left side'}
+              >
+                {position === 'left' ? <PanelRight size={15} /> : <PanelLeft size={15} />}
+              </button>
+            )}
 
             {/* Expand / Minimize Toggle */}
             <button
@@ -159,7 +206,7 @@ export default function MarkdownArtifactViewer({
         <div className="flex-1 overflow-y-auto custom-scrollbar p-6 sm:p-10 bg-white">
           <div className="max-w-3xl mx-auto">
             {activeTab === 'preview' ? (
-              <article className="markdown-content font-serif text-slate-900 leading-relaxed space-y-4">
+              <article id="artifact-viewer-canvas" className="markdown-content font-serif text-slate-900 leading-relaxed space-y-4">
                 <ReactMarkdown
                   remarkPlugins={[remarkGfm, remarkMath]}
                   rehypePlugins={[rehypeKatex]}
