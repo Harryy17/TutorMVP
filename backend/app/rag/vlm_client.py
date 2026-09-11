@@ -175,14 +175,37 @@ class GeminiVLMClient:
         b64_data = base64.b64encode(image_bytes).decode("utf-8")
 
         prompt = (
-            f"You are an expert academic curriculum parser. The user is studying '{subject_hint or 'the uploaded subject'}'.\n"
-            "Analyze this scanned document/page image.\n"
-            "MANDATORY INSTRUCTIONS:\n"
-            "1. Extract 3 to 6 core academic topics and key concepts from this text in prerequisite order (Beginner -> Intermediate -> Advanced).\n"
-            "2. Avoid generic titles like 'Introduction' or 'Overview'. Extract concrete, specific conceptual topics.\n"
-            "3. Return a clean, strictly valid JSON response with this structure:\n"
+            f"You are an expert academic curriculum parser and content validator for an AI tutoring system.\n"
+            f"The user uploaded an image for their study room (subject hint: '{subject_hint or 'General Subject'}').\n\n"
+            "STEP 1: EDUCATIONAL STUDY MATERIAL VALIDATION\n"
+            "Carefully examine the visual content of this image and classify whether it is genuine academic study material:\n"
+            "A. ACADEMIC STUDY MATERIAL (is_study_material: true):\n"
+            "   - Textbook page, lecture slides, chalkboard/whiteboard notes, handwritten/typed study notes\n"
+            "   - Exam papers, problem sets, formulas/equations, scientific charts/diagrams, code tutorials\n"
+            "   - Academic paper, syllabus, or course handout\n\n"
+            "B. NON-STUDY MATERIAL (is_study_material: false):\n"
+            "   - Personal photos, selfies, portraits, group pictures\n"
+            "   - Animals/pets, landscapes, nature, food, vehicles, fashion\n"
+            "   - Memes, comics, video game screenshots, movie posters, entertainment graphics\n"
+            "   - Financial receipts, invoices, bills, shipping labels, personal identity cards\n"
+            "   - Random objects, icons, wallpapers, decorative graphics without educational text\n\n"
+            "STEP 2: OUTPUT INSTRUCTIONS\n"
+            "If NON-STUDY MATERIAL:\n"
+            "  Set 'is_study_material': false.\n"
+            "  Set 'detected_document_type' to a specific human-readable descriptor (e.g. 'Personal Photo', 'Meme / Entertainment Image', 'Financial Receipt', 'Vehicle Photo', 'Landscape Photo', 'Random Screenshot').\n"
+            "  Set 'validation_reason': 'This image appears to be a [type] rather than academic coursework or study material. IndieTutor is an AI study room designed exclusively for learning course concepts and cannot answer questions or generate study plans from non-educational images.'\n"
+            "  Set 'topics': [] (empty list).\n\n"
+            "If ACADEMIC STUDY MATERIAL:\n"
+            "  Set 'is_study_material': true.\n"
+            "  Set 'detected_document_type': 'Textbook Page' / 'Lecture Slides' / 'Handwritten Notes' / 'Formula Sheet' / etc.\n"
+            "  Extract 3 to 6 core academic topics and key concepts in prerequisite order (Beginner -> Intermediate -> Advanced).\n"
+            "  Set 'validation_reason': ''\n\n"
+            "Return strictly valid JSON with this exact schema:\n"
             "{\n"
-            '  "thought_process": "Brief explanation of topic prioritization.",\n'
+            '  "is_study_material": true,\n'
+            '  "detected_document_type": "Textbook Page",\n'
+            '  "validation_reason": "",\n'
+            '  "thought_process": "Brief explanation of image classification and topics.",\n'
             '  "title": "Main Subject or Chapter Title",\n'
             '  "topics": [\n'
             "    {\n"
@@ -241,11 +264,31 @@ class GeminiVLMClient:
                                 cleaned = cleaned[4:].strip()
 
                         parsed = json.loads(cleaned)
-                        if parsed and "topics" in parsed and len(parsed["topics"]) > 0:
-                            for i, t in enumerate(parsed["topics"]):
-                                if not t.get("id"):
-                                    t["id"] = f"topic_{i+1}"
-                            return parsed
+                        if isinstance(parsed, dict):
+                            # Check if VLM classified as non-study material
+                            if parsed.get("is_study_material") is False:
+                                return {
+                                    "is_study_material": False,
+                                    "detected_document_type": parsed.get("detected_document_type", "Non-Academic Image"),
+                                    "validation_reason": parsed.get(
+                                        "validation_reason",
+                                        "This image does not contain academic coursework or study material. IndieTutor only processes educational study materials."
+                                    ),
+                                    "thought_process": parsed.get("thought_process", "VLM guardrail identified non-educational visual content."),
+                                    "subject": "Non-Study Material",
+                                    "title": parsed.get("detected_document_type", "Non-Academic Image"),
+                                    "topics": [],
+                                }
+
+                            # If valid study material with topics
+                            if "topics" in parsed and len(parsed["topics"]) > 0:
+                                for i, t in enumerate(parsed["topics"]):
+                                    if not t.get("id"):
+                                        t["id"] = f"topic_{i+1}"
+                                parsed["is_study_material"] = True
+                                if not parsed.get("detected_document_type"):
+                                    parsed["detected_document_type"] = "Study Material Image"
+                                return parsed
                     elif r.status_code in (404, 429, 503):
                         continue
             except Exception as e:

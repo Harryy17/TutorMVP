@@ -4,18 +4,18 @@
     "title": "Geography",
     "subject": "Geography",
     "created_at": "2026-09-02T11:11:44.075687",
-    "last_active": "2026-09-02T15:09:33.765970",
+    "last_active": "2026-09-02T16:17:02.857178",
     "topics_count": 7,
-    "messages_count": 14
+    "messages_count": 16
   },
   "session_1788328113365": {
     "session_id": "session_1788328113365",
     "title": "Machine Learning",
     "subject": "Machine Learning",
     "created_at": "2026-09-02T11:18:33.388546",
-    "last_active": "2026-09-02T15:18:44.156240",
+    "last_active": "2026-09-02T16:23:53.209421",
     "topics_count": 6,
-    "messages_count": 12
+    "messages_count": 14
   },
   "session_7c83686b53": {
     "session_id": "session_7c83686b53",
@@ -115,5 +115,14 @@
     "last_active": "2026-09-02T14:27:35.688573",
     "topics_count": 5,
     "messages_count": 2
+  },
+  "session_8c4ae4b727": {
+    "session_id": "session_8c4ae4b727",
+    "title": "Please explain this in a simpler...",
+    "subject": "Study Session",
+    "created_at": "2026-09-02T16:24:45.668984",
+    "last_active": "2026-09-02T16:26:57.988371",
+    "topics_count": 3,
+    "messages_count": 9
   }
 }

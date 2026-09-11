@@ -443,15 +443,18 @@ export default function GeminiStudyChat({
 
       // ── Non-Study Material Validation Guardrail ──
       if (!isStudyMaterial) {
-        const detectedType = res.data?.detected_document_type || 'Non-Educational Document'
-        const reason = res.data?.validation_reason || 'This document does not appear to contain academic course concepts or syllabus materials.'
+        const isImage = file.type.startsWith('image/') || /\.(png|jpe?g|webp|bmp|gif|tiff?)$/i.test(file.name)
+        const detectedType = res.data?.detected_document_type || (isImage ? 'Non-Educational Image' : 'Non-Educational Document')
+        const reason = res.data?.validation_reason || (isImage
+          ? 'This image does not appear to contain academic coursework, textbook pages, lecture slides, or study notes.'
+          : 'This document does not appear to contain academic course concepts or syllabus materials.')
 
         const rejectionMsg = {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `### 📄 Non-Academic Material Detected\n\nI analyzed **${file.name}** and classified it as **${detectedType}**.\n\n> **Academic Guardrail Notice:**\n> ${reason}\n\n**Recommended Next Steps:**\n- 📘 Upload a textbook chapter, lecture slides, syllabus, or notes (`+` button).\n- 💬 Or type any topic or question directly below to begin learning!`,
+          text: `### ${isImage ? '🖼️ Non-Study Material Image Detected' : '📄 Non-Academic Material Detected'}\n\nI analyzed **${file.name}** and identified it as **${detectedType}**.\n\n> **Academic Guardrail Notice:**\n> ${reason}\n\nI cannot answer questions or generate curriculum roadmaps for this ${isImage ? 'image' : 'file'} because IndieTutor is an academic learning tutor designed exclusively for educational coursework.\n\n**Recommended Next Steps:**\n- 📘 Upload a clear photo or scan of textbook pages, lecture slides, problem sets, or handwritten study notes.\n- 💬 Or type any topic or question directly below to begin learning!`,
           isAnalyzing: false,
-          thoughtProcess: thoughtProcess || `Document classification identified ${detectedType}. Rejection guardrail triggered.`,
+          thoughtProcess: thoughtProcess || `Visual classification identified ${detectedType}. Rejection guardrail triggered.`,
         }
 
         const updatedMessages = [...messages, userMsg, rejectionMsg]
