@@ -17,7 +17,6 @@ import type { TopicItem } from './TopicCards'
 import StudyMapPanel from './StudyMapPanel'
 import ChatInputForm from './ChatInputForm'
 import MarkdownArtifactViewer from './MarkdownArtifactViewer'
-import { MermaidRenderer } from './MermaidRenderer'
 import { DocumentFigureCard } from './DocumentFigureCard'
 import { studyApi } from '../../services/api'
 import { cleanAcademicText } from '../../utils/textFormatter'
@@ -89,18 +88,6 @@ const getDisplayChatText = (m: Message): string => {
 }
 
 const chatMarkdownComponents = {
-  code({ node, className, children, ...props }: any) {
-    const match = /language-(\w+)/.exec(className || '')
-    const language = match ? match[1] : ''
-    if (language === 'mermaid') {
-      return <MermaidRenderer code={String(children).replace(/\n$/, '')} />
-    }
-    return (
-      <code className={className} {...props}>
-        {children}
-      </code>
-    )
-  },
   img({ node, src, alt, ...props }: any) {
     if (src) {
       return <DocumentFigureCard src={src} alt={alt || ''} caption={alt} />

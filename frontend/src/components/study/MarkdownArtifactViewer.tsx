@@ -8,7 +8,6 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
-import { MermaidRenderer } from './MermaidRenderer'
 import { DocumentFigureCard } from './DocumentFigureCard'
 import { exportNotesToPdf } from '../../utils/exportPdf'
 
@@ -213,18 +212,6 @@ export default function MarkdownArtifactViewer({
                   remarkPlugins={[remarkGfm, remarkMath]}
                   rehypePlugins={[rehypeKatex]}
                   components={{
-                    code({ node, className, children, ...props }: any) {
-                      const match = /language-(\w+)/.exec(className || '')
-                      const language = match ? match[1] : ''
-                      if (language === 'mermaid') {
-                        return <MermaidRenderer code={String(children).replace(/\n$/, '')} />
-                      }
-                      return (
-                        <code className={className} {...props}>
-                          {children}
-                        </code>
-                      )
-                    },
                     img({ node, src, alt, ...props }: any) {
                       if (src) {
                         return <DocumentFigureCard src={src} alt={alt || ''} caption={alt} />

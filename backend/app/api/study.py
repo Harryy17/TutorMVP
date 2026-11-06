@@ -225,6 +225,7 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
         user_name=body.user_name,
         difficulty=body.difficulty or "standard",
         query_analysis=analysis,
+        session_id=body.session_id,
     )
     return decision
 
@@ -600,6 +601,7 @@ async def get_figure_image(session_id: str, file_name: str):
 
     possible_paths = [
         upload_root / safe_sid / "figures" / safe_fname,
+        upload_root / safe_sid / "generated" / safe_fname,
         upload_root / safe_sid / "slides" / safe_fname,
         upload_root / safe_sid / safe_fname,
     ]

@@ -30,6 +30,7 @@ import asyncio
 from typing import Dict, Any, List, Optional
 from app.rag.ollama_client import ollama
 from app.rag.user_memory import user_memory_store
+from app.rag.image_gen_client import image_client
 
 
 class DecisionAgent:
@@ -68,13 +69,10 @@ RESPONSE GUIDELINES:
     5. End with a **natural, conversational follow-up question** that the student can easily answer with a simple "yes" or "no" (e.g., *"Would you like to walk through a concrete step-by-step example of this formula?"* or *"Shall we do a quick 2-question quiz to test your understanding on this?"*).
   - **diagram** (architecture / workflow / visual explanation):
     1. Start with an intuitive real-world analogy hook explaining the high-level architecture or mechanism.
-    2. Provide a clean, valid **Mermaid Diagram** in a ```mermaid fenced code block (e.g. `flowchart TD`, `sequenceDiagram`, `stateDiagram-v2`, or `classDiagram`).
-       - Use clean node identifiers and human-readable descriptive text in quotes `id["Text"]`.
-       - Use descriptive edge arrows (`-->|Action|`).
-    3. If the retrieved material contains an existing figure `[Figure Image URL: /api/media/...]`, embed it in Markdown: `![Figure: Title](/api/media/...)`.
-    4. Break down each component, stage, or flow step-by-step with bold labels.
-    5. Provide a **Concrete Real-World Example** of data or operations moving through the diagram.
-    6. End with a natural yes/no conversational follow-up question.
+    2. Embed the relevant educational visual diagram or document figure using standard Markdown: `![Visual Diagram: Title](/api/media/...)`.
+    3. Break down each component, stage, or flow step-by-step with bold labels.
+    4. Provide a **Concrete Real-World Example** of data or operations moving through the concept.
+    5. End with a natural yes/no conversational follow-up question.
   - **strict constraints & direct answers**:
     - If the student requests "answer only", "direct answer", "one word", "one sentence", "one paragraph", "table", or "summary" (or if indicated in the planning note):
       PRIORITIZE the requested constraint above all default pedagogical structures!
@@ -194,6 +192,7 @@ Respond with ONLY this JSON object:
         user_name: Optional[str] = None,
         difficulty: str = "standard",
         query_analysis: Optional[Dict[str, Any]] = None,
+        session_id: Optional[str] = "default_session",
     ) -> Dict[str, Any]:
         """
         Executes the plan produced by QueryAnalyzerAgent: builds a plan-aware prompt,
@@ -204,10 +203,50 @@ Respond with ONLY this JSON object:
         # Trigger non-blocking background memory extraction as early as possible.
         asyncio.create_task(user_memory_store.auto_extract_and_update(user_id, message, history))
 
+        # Check if an educational visual diagram / image is requested or planned
+        visual_modality = query_analysis.get("visual_modality") if query_analysis else None
+        is_visual_needed = (
+            visual_modality in ["generate_image", "generative_diagram"]
+            or (query_analysis and query_analysis.get("response_format") == "diagram")
+            or any(w in message.lower() for w in ["diagram", "visualize", "show image", "with an image", "picture of", "schematic", "visual"])
+        )
+
+        generated_image_info: Optional[Dict[str, Any]] = None
+        if is_visual_needed and image_client.is_configured():
+            target_topic = (
+                (query_analysis.get("target_topic") if query_analysis else None)
+                or current_subject
+                or message
+            )
+            prompt = image_client.craft_educational_prompt(
+                topic=target_topic,
+                context_snippet=context[:200] if context else ""
+            )
+            try:
+                generated_image_info = await image_client.generate_image(
+                    prompt=prompt,
+                    session_id=session_id or "default_session",
+                )
+            except Exception as img_err:
+                print(f"[DecisionAgent] Image generation note: {img_err}")
+
         base_messages = self._build_base_messages(
             current_subject, doc_status_note, context, file_name,
             difficulty, user_id, query_analysis, history,
         )
+
+        if generated_image_info and generated_image_info.get("url"):
+            img_url = generated_image_info["url"]
+            img_topic = (query_analysis.get("target_topic") if query_analysis else None) or current_subject or "Concept Diagram"
+            base_messages.append({
+                "role": "system",
+                "content": (
+                    f"VISUAL IMAGE GENERATED: An educational visual diagram has been generated for this concept.\n"
+                    f"Embed this image near the start of your explanation using standard Markdown: "
+                    f"![Visual Diagram: {img_topic}]({img_url})\n"
+                    f"Explain the visual diagram clearly and break down its core mechanisms step-by-step."
+                ),
+            })
 
         result: Optional[Dict[str, Any]] = None
         last_error: Optional[Exception] = None
@@ -239,7 +278,7 @@ Respond with ONLY this JSON object:
                 print(f"[DecisionAgent] all generation attempts exhausted, using fallback: {last_error}")
             return self._fallback_response(message, context, current_subject, query_analysis)
 
-        result = self._finalize(result, message, query_analysis)
+        result = self._finalize(result, message, query_analysis, generated_image_info)
 
         if (
             self.enable_self_critique
@@ -248,7 +287,7 @@ Respond with ONLY this JSON object:
             and context.strip()
             and len(result.get("reply", "")) > 40
         ):
-            result = await self._maybe_reground(result, context, message, query_analysis)
+            result = await self._maybe_reground(result, context, message, query_analysis, generated_image_info)
 
         return result
 
@@ -360,8 +399,8 @@ Respond with ONLY this JSON object:
 
         if plan.get("requires_table_data"):
             parts.append("- likely needs table/numeric data")
-        if plan.get("visual_modality") == "generative_diagram" or plan.get("response_format") == "diagram":
-            parts.append("- visual modality: GENERATE an interactive Mermaid diagram (```mermaid ... ```) illustrating the architecture, pipeline, or workflow")
+        if plan.get("visual_modality") in ["generate_image", "generative_diagram"] or plan.get("response_format") == "diagram":
+            parts.append("- visual modality: an educational visual diagram / schematic is synthesized using OpenAI Image Generation and embedded via Markdown: ![Diagram: Title](/api/media/...)")
         elif plan.get("visual_modality") == "document_figure":
             parts.append("- visual modality: locate and reference document figure images from retrieved context (e.g. ![Figure](/api/media/...))")
         elif plan.get("requires_image_data"):
@@ -423,6 +462,7 @@ Respond with ONLY this JSON object:
         data: Dict[str, Any],
         message: str,
         query_analysis: Optional[Dict[str, Any]] = None,
+        generated_image_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         reply = data.get("reply", "")
         reply = re.sub(r"[\U00010000-\U0010ffff]", "", reply).strip()
@@ -434,6 +474,13 @@ Respond with ONLY this JSON object:
         reply = re.sub(r"\\righ\s*t\b", r"\\right", reply)
         reply = re.sub(r"\\sq\s*rt\b", r"\\sqrt", reply)
         reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
+
+        # Embed generated visual diagram if present and not yet referenced
+        if generated_image_info and generated_image_info.get("url"):
+            img_url = generated_image_info["url"]
+            img_topic = (query_analysis.get("target_topic") if query_analysis else None) or "Concept Diagram"
+            if img_url not in reply:
+                reply = f"![Visual Diagram: {img_topic}]({img_url})\n\n{reply}"
 
         # Dynamic cognitive constraint post-processing
         if query_analysis:
@@ -497,6 +544,7 @@ Respond with ONLY this JSON object:
         context: str,
         message: str,
         query_analysis: Optional[Dict[str, Any]] = None,
+        generated_image_info: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Runs a cheap second LLM pass checking whether the reply's claims are supported by
         the retrieved context. On failure, regenerates once with a stricter grounding instruction.
@@ -530,7 +578,7 @@ Respond with ONLY this JSON object:
             raw = await ollama.chat(messages, temperature=0.0)
             parsed = self._parse_llm_response(raw)
             if parsed and parsed.get("reply"):
-                return self._finalize(parsed, message, query_analysis)
+                return self._finalize(parsed, message, query_analysis, generated_image_info)
         except Exception as e:  # noqa: BLE001
             print(f"[DecisionAgent] re-grounding attempt failed, keeping original reply: {e}")
 

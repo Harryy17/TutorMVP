@@ -49,9 +49,9 @@ Work through this reasoning chain internally before writing JSON:
      * `requires_image_data`: true if the question refers to a visual figure, diagram, chart, or slide image in the document, or if answering it strongly benefits from visual document context.
      * `visual_modality`:
        - "document_figure": Student asks to see, locate, or inspect a specific figure, architecture slide, diagram, or chart from the uploaded material.
-       - "generative_diagram": The concept involves workflows, sequential pipelines, architecture, state machines, lifecycles, or decision trees that should be rendered as a clear Mermaid.js diagram.
+       - "generate_image": The concept involves workflows, sequential pipelines, architecture, anatomy, or scientific mechanisms that should be visually illustrated using OpenAI Image Generation.
        - "none": A pure text or mathematical explanation is optimal.
-     * `suggested_diagram_type`: "flowchart" | "sequenceDiagram" | "stateDiagram" | "classDiagram" | "mindmap" | null.
+     * `suggested_diagram_type`: "schematic" | "infographic" | "architecture" | "concept_illustration" | null.
 5. LENGTH & CONSTRAINTS (Cognitive Detection):
    - Evaluate if the student specified a specific length, directness, or brevity constraint:
      * `length_constraint`:
@@ -109,8 +109,8 @@ Respond with ONLY this JSON object, no preamble, no markdown fences:
   "suppress_scaffolding": true | false,
   "requires_table_data": true | false,
   "requires_image_data": true | false,
-  "visual_modality": "document_figure" | "generative_diagram" | "none",
-  "suggested_diagram_type": "flowchart" | "sequenceDiagram" | "stateDiagram" | "classDiagram" | "mindmap" | null,
+  "visual_modality": "document_figure" | "generate_image" | "none",
+  "suggested_diagram_type": "schematic" | "infographic" | "architecture" | "concept_illustration" | null,
   "confidence": 0.0,
   "needs_clarification": true | false,
   "recommended_action": "EXPLAIN" | "QUIZ_QUESTION" | "EVALUATE_ANSWER" | "GENERATE_PLAN" | "SET_SUBJECT" | "GREET"
@@ -302,8 +302,10 @@ class QueryAnalyzerAgent:
         needs_clarification = bool(data.get("needs_clarification", False)) or confidence < _LOW_CONFIDENCE_THRESHOLD
 
         visual_modality = str(data.get("visual_modality") or "none").strip().lower()
-        if visual_modality not in ["document_figure", "generative_diagram", "none"]:
-            visual_modality = "generative_diagram" if bool(data.get("requires_image_data")) else "none"
+        if visual_modality in ["generative_diagram", "generate_image"]:
+            visual_modality = "generate_image"
+        elif visual_modality not in ["document_figure", "generate_image", "none"]:
+            visual_modality = "generate_image" if bool(data.get("requires_image_data")) else "none"
 
         suggested_diagram_type = data.get("suggested_diagram_type")
 
