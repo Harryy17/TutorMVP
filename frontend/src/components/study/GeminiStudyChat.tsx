@@ -17,6 +17,8 @@ import type { TopicItem } from './TopicCards'
 import StudyMapPanel from './StudyMapPanel'
 import ChatInputForm from './ChatInputForm'
 import MarkdownArtifactViewer from './MarkdownArtifactViewer'
+import { MermaidRenderer } from './MermaidRenderer'
+import { DocumentFigureCard } from './DocumentFigureCard'
 import { studyApi } from '../../services/api'
 import { cleanAcademicText } from '../../utils/textFormatter'
 import { exportNotesToPdf } from '../../utils/exportPdf'
@@ -84,6 +86,27 @@ const getDisplayChatText = (m: Message): string => {
 
   cleaned = cleaned.replace(/\n{2,}/g, '\n\n')
   return cleaned.trim()
+}
+
+const chatMarkdownComponents = {
+  code({ node, className, children, ...props }: any) {
+    const match = /language-(\w+)/.exec(className || '')
+    const language = match ? match[1] : ''
+    if (language === 'mermaid') {
+      return <MermaidRenderer code={String(children).replace(/\n$/, '')} />
+    }
+    return (
+      <code className={className} {...props}>
+        {children}
+      </code>
+    )
+  },
+  img({ node, src, alt, ...props }: any) {
+    if (src) {
+      return <DocumentFigureCard src={src} alt={alt || ''} caption={alt} />
+    }
+    return <img src={src} alt={alt} {...props} />
+  },
 }
 
 export default function GeminiStudyChat({
@@ -1050,7 +1073,13 @@ export default function GeminiStudyChat({
                     </div>
                   ) : (
                     <div className={m.role === 'user' ? 'text-[14px] leading-relaxed text-[#1B2340]' : 'markdown-content'}>
-                      <ReactMarkdown remarkPlugins={[remarkGfm, remarkMath]} rehypePlugins={[rehypeKatex]}>{getDisplayChatText(m)}</ReactMarkdown>
+                      <ReactMarkdown
+                        remarkPlugins={[remarkGfm, remarkMath]}
+                        rehypePlugins={[rehypeKatex]}
+                        components={chatMarkdownComponents}
+                      >
+                        {getDisplayChatText(m)}
+                      </ReactMarkdown>
                     </div>
                   )
                 )}

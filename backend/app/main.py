@@ -84,3 +84,8 @@ async def export_notes_md(body: study.ExportNotesRequest):
     return await study.export_notes_markdown(body)
 
 
+@app.get("/api/media/{session_id}/figure/{file_name}")
+async def get_root_figure_image(session_id: str, file_name: str):
+    return await study.get_figure_image(session_id, file_name)
+
+

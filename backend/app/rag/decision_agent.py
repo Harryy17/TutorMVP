@@ -66,12 +66,24 @@ RESPONSE GUIDELINES:
     3. Break down key components with bold labels.
     4. Provide a **Concrete Real-World Example** (`**Example:** ...`) with simple numbers or everyday scenario so the student understands immediately.
     5. End with a **natural, conversational follow-up question** that the student can easily answer with a simple "yes" or "no" (e.g., *"Would you like to walk through a concrete step-by-step example of this formula?"* or *"Shall we do a quick 2-question quiz to test your understanding on this?"*).
-  - **diagram** (image / architecture explanation):
-    1. Start with an intuitive real-world analogy hook.
-    2. Define the exact architecture / figure clearly with proper technical terms.
-    3. Break down the visual workflow step-by-step with bold labels.
-    4. Provide a **Concrete Example**.
-    5. End with a natural yes/no conversational question (e.g., *"Would you like to explore how data flows through the next layer in this architecture?"*).
+  - **diagram** (architecture / workflow / visual explanation):
+    1. Start with an intuitive real-world analogy hook explaining the high-level architecture or mechanism.
+    2. Provide a clean, valid **Mermaid Diagram** in a ```mermaid fenced code block (e.g. `flowchart TD`, `sequenceDiagram`, `stateDiagram-v2`, or `classDiagram`).
+       - Use clean node identifiers and human-readable descriptive text in quotes `id["Text"]`.
+       - Use descriptive edge arrows (`-->|Action|`).
+    3. If the retrieved material contains an existing figure `[Figure Image URL: /api/media/...]`, embed it in Markdown: `![Figure: Title](/api/media/...)`.
+    4. Break down each component, stage, or flow step-by-step with bold labels.
+    5. Provide a **Concrete Real-World Example** of data or operations moving through the diagram.
+    6. End with a natural yes/no conversational follow-up question.
+  - **strict constraints & direct answers**:
+    - If the student requests "answer only", "direct answer", "one word", "one sentence", "one paragraph", "table", or "summary" (or if indicated in the planning note):
+      PRIORITIZE the requested constraint above all default pedagogical structures!
+      - If "one_word": output ONLY that single exact word, term, or acronym. Zero intro, zero punctuation, zero explanation.
+      - If "one_sentence": output EXACTLY one complete, grammatically sound sentence answering the question directly.
+      - If "one_paragraph": output EXACTLY one focused paragraph (3-5 sentences). No multiple paragraphs, no bullet points.
+      - If "table": present the answer primarily as a clean, properly formatted Markdown table with column headers.
+      - If "bullet_summary": present the answer as 3-5 concise bullet points with key concepts in bold.
+      - If "direct_answer_only" or "suppress_scaffolding" is active: DO NOT include introductory pleasantries ("Sure!", "Here is..."), DO NOT include hook sentences, and DO NOT ask any follow-up question. Conclude immediately after the direct answer.
   - **study_notes** (student wants a standalone reference document, not a conversational answer):
     1. Start with a single H1 title: `# {Topic} — Study Notes`.
     2. If the student's memory shows related prior topics, add one italic line:
@@ -227,7 +239,7 @@ Respond with ONLY this JSON object:
                 print(f"[DecisionAgent] all generation attempts exhausted, using fallback: {last_error}")
             return self._fallback_response(message, context, current_subject, query_analysis)
 
-        result = self._finalize(result, message)
+        result = self._finalize(result, message, query_analysis)
 
         if (
             self.enable_self_critique
@@ -236,7 +248,7 @@ Respond with ONLY this JSON object:
             and context.strip()
             and len(result.get("reply", "")) > 40
         ):
-            result = await self._maybe_reground(result, context, message)
+            result = await self._maybe_reground(result, context, message, query_analysis)
 
         return result
 
@@ -321,9 +333,38 @@ Respond with ONLY this JSON object:
             parts.append(f"- decomposed sub-questions: {json.dumps(sub_qs)}")
         if plan.get("response_format"):
             parts.append(f"- recommended response_format: {plan.get('response_format')}")
+
+        # Length & directness constraints from cognitive analysis
+        length_constraint = plan.get("length_constraint")
+        if length_constraint == "one_word":
+            parts.append("- STRICT CONSTRAINT: Respond with ONLY the exact single word, term, or acronym. Zero intro, zero punctuation, zero explanations.")
+        elif length_constraint == "one_sentence":
+            parts.append("- STRICT CONSTRAINT: Respond with EXACTLY ONE complete, grammatically sound sentence. No conversational intro, no follow-up question.")
+        elif length_constraint == "one_paragraph":
+            parts.append("- STRICT CONSTRAINT: Respond in EXACTLY ONE coherent paragraph (3-5 sentences). Do not use bullet points or multiple paragraphs.")
+        elif length_constraint == "concise":
+            parts.append("- CONSTRAINT: Keep the explanation very brief and concise (max 2-3 sentences or short bullets).")
+        elif length_constraint == "comprehensive":
+            parts.append("- CONSTRAINT: Provide an in-depth, comprehensive explanation covering nuances and mechanisms.")
+
+        output_style = plan.get("output_style")
+        if output_style == "table" or plan.get("requires_table_data"):
+            parts.append("- FORMAT REQUIREMENT: Present the core information as a clean, properly formatted Markdown table with headers and aligned columns.")
+        elif output_style == "bullet_summary":
+            parts.append("- FORMAT REQUIREMENT: Present the response as 3 to 5 clear Markdown bullet points with key terms in bold.")
+        elif output_style == "direct_answer_only":
+            parts.append("- DIRECTNESS REQUIREMENT: Provide ONLY the direct factual answer. Omit pleasantries, conversational filler, and introductory meta-commentary.")
+
+        if plan.get("suppress_scaffolding"):
+            parts.append("- SUPPRESS SCAFFOLDING: Do NOT ask any follow-up question at the end. Do NOT provide an intro hook or chit-chat. End immediately after the answer.")
+
         if plan.get("requires_table_data"):
             parts.append("- likely needs table/numeric data")
-        if plan.get("requires_image_data"):
+        if plan.get("visual_modality") == "generative_diagram" or plan.get("response_format") == "diagram":
+            parts.append("- visual modality: GENERATE an interactive Mermaid diagram (```mermaid ... ```) illustrating the architecture, pipeline, or workflow")
+        elif plan.get("visual_modality") == "document_figure":
+            parts.append("- visual modality: locate and reference document figure images from retrieved context (e.g. ![Figure](/api/media/...))")
+        elif plan.get("requires_image_data"):
             parts.append("- likely needs diagram/figure explanation")
         if plan.get("confidence") is not None:
             parts.append(f"- planner confidence: {plan.get('confidence')}")
@@ -377,7 +418,12 @@ Respond with ONLY this JSON object:
 
         return data
 
-    def _finalize(self, data: Dict[str, Any], message: str) -> Dict[str, Any]:
+    def _finalize(
+        self,
+        data: Dict[str, Any],
+        message: str,
+        query_analysis: Optional[Dict[str, Any]] = None,
+    ) -> Dict[str, Any]:
         reply = data.get("reply", "")
         reply = re.sub(r"[\U00010000-\U0010ffff]", "", reply).strip()
         reply = re.sub(r"^(?:HOOK|DEFINITION|BREAKDOWN|VISUAL|CLOSE):\s*", "", reply, flags=re.MULTILINE)
@@ -388,6 +434,25 @@ Respond with ONLY this JSON object:
         reply = re.sub(r"\\righ\s*t\b", r"\\right", reply)
         reply = re.sub(r"\\sq\s*rt\b", r"\\sqrt", reply)
         reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
+
+        # Dynamic cognitive constraint post-processing
+        if query_analysis:
+            len_c = query_analysis.get("length_constraint")
+            if len_c == "one_word":
+                clean_word = re.sub(r"^(?:answer|the answer is|term|result|name):\s*", "", reply, flags=re.IGNORECASE).strip()
+                clean_word = clean_word.strip('"`*.,;')
+                words = clean_word.split()
+                if len(words) <= 3:
+                    reply = clean_word
+
+            if query_analysis.get("suppress_scaffolding"):
+                # Strip trailing follow-up conversational questions
+                reply = re.sub(
+                    r"\n+\s*(?:Would you like|Shall we|Do you want to|Should we|Let me know if)[^?\n]*\?\s*$",
+                    "",
+                    reply,
+                    flags=re.IGNORECASE
+                ).strip()
 
         thought = data.get("thought_process") or "Analyzed question against uploaded material and synthesized a clear, simple explanation."
         intent = data.get("intent", "QUESTION")
@@ -427,7 +492,11 @@ Respond with ONLY this JSON object:
     # ------------------------------------------------------------------
 
     async def _maybe_reground(
-        self, result: Dict[str, Any], context: str, message: str,
+        self,
+        result: Dict[str, Any],
+        context: str,
+        message: str,
+        query_analysis: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         """Runs a cheap second LLM pass checking whether the reply's claims are supported by
         the retrieved context. On failure, regenerates once with a stricter grounding instruction.
@@ -461,7 +530,7 @@ Respond with ONLY this JSON object:
             raw = await ollama.chat(messages, temperature=0.0)
             parsed = self._parse_llm_response(raw)
             if parsed and parsed.get("reply"):
-                return self._finalize(parsed, message)
+                return self._finalize(parsed, message, query_analysis)
         except Exception as e:  # noqa: BLE001
             print(f"[DecisionAgent] re-grounding attempt failed, keeping original reply: {e}")
 

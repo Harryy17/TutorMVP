@@ -16,7 +16,7 @@ import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
 from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 
 from app.core.config import get_settings
@@ -588,3 +588,25 @@ async def export_notes_markdown(body: ExportNotesRequest):
             "Content-Length": str(len(content_bytes)),
         },
     )
+
+
+# ─── 9. Visual Media: Serve Extracted Figures & Slides ────────────────────────
+@router.get("/media/{session_id}/figure/{file_name}")
+async def get_figure_image(session_id: str, file_name: str):
+    """Serves high-resolution figures extracted from the session document."""
+    upload_root = Path(__file__).resolve().parent.parent.parent / "uploads"
+    safe_sid = Path(session_id).name
+    safe_fname = Path(file_name).name
+
+    possible_paths = [
+        upload_root / safe_sid / "figures" / safe_fname,
+        upload_root / safe_sid / "slides" / safe_fname,
+        upload_root / safe_sid / safe_fname,
+    ]
+    for p in possible_paths:
+        if p.exists() and p.is_file():
+            ext = p.suffix.lower()
+            media_type = "image/png" if ext == ".png" else ("image/jpeg" if ext in [".jpg", ".jpeg"] else "application/octet-stream")
+            return FileResponse(p, media_type=media_type)
+
+    raise HTTPException(status_code=404, detail="Figure image not found")

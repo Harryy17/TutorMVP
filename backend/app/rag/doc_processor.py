@@ -463,14 +463,30 @@ class DocumentProcessor:
                         if not image_bytes or len(image_bytes) < 3000:
                             continue
 
-                        # Extract potential figure numbers and captions from page text (e.g. "Fig. 4.3: Bamboo plantation in North-east")
+                        # Persist extracted high-res figure to disk for frontend viewing
+                        figures_dir = Path(__file__).resolve().parent.parent.parent / "uploads" / doc_id / "figures"
+                        figures_dir.mkdir(parents=True, exist_ok=True)
+                        fig_filename = f"fig_p{page_num + 1}_{img_index + 1}.{image_ext}"
+                        fig_path = figures_dir / fig_filename
+                        try:
+                            with open(fig_path, "wb") as f_img:
+                                f_img.write(image_bytes)
+                        except Exception as save_err:
+                            print(f"[DocProcessor] Figure save note: {save_err}")
+
+                        fig_url = f"/api/media/{doc_id}/figure/{fig_filename}"
+
+                        # Extract potential figure numbers and captions from page text
                         fig_matches = re.findall(r"(?:Fig(?:ure)?\.?\s*\d+(?:\.\d+)?[:\s\-\–][^\n\.\;]{4,100})", page_text, re.IGNORECASE)
                         page_fig_context = "; ".join(fig_matches[:3]) if fig_matches else ""
 
                         caption = await self._caption_image_with_vlm(image_bytes, mime_type=f"image/{image_ext}", context_hint=page_fig_context)
                         await asyncio.sleep(0.2)  # Yield loop to allow user chat requests priority
 
-                        content_parts = [f"Figure / Diagram on Page {page_num + 1}"]
+                        content_parts = [
+                            f"Figure / Diagram on Page {page_num + 1}",
+                            f"[Figure Image URL: {fig_url}]"
+                        ]
                         if page_fig_context:
                             content_parts.append(f"Figure Caption in text: {page_fig_context}")
                         if caption:
@@ -483,7 +499,12 @@ class DocumentProcessor:
                                 page=page_num + 1,
                                 source_type="image_caption",
                                 content=". ".join(content_parts),
-                                metadata={"image_index": img_index + 1}
+                                metadata={
+                                    "image_index": img_index + 1,
+                                    "image_url": fig_url,
+                                    "page": page_num + 1,
+                                    "caption": caption.strip() if caption else page_fig_context,
+                                }
                             )
                             image_chunks.append(chunk)
             except Exception as fitz_err:

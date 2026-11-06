@@ -41,5 +41,19 @@
     "weaknesses": [],
     "facts": [],
     "last_active": "2026-11-06T08:18:26.331523"
+  },
+  "test_user": {
+    "user_id": "test_user",
+    "name": "Student",
+    "learning_style": "Prefers visual diagrams when learning a workflow.",
+    "active_goals": [
+      "Master academic coursework",
+      "Build strong conceptual foundations",
+      "Understand the tutor booking and payment workflow."
+    ],
+    "studied_topics": [],
+    "weaknesses": [],
+    "facts": [],
+    "last_active": "2026-11-06T11:04:09.008607"
   }
 }

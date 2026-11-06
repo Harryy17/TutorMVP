@@ -44,16 +44,38 @@ Work through this reasoning chain internally before writing JSON:
    answered from a focused retrieval. If it's a single atomic question, sub_questions = [the question itself].
 3. RETRIEVAL STRATEGY: What clean full-text search queries will surface the right chunks? Prefer specific
    noun-phrases over the raw sentence. Include one query per sub-question.
-4. SOURCE NEEDS: Does answering this plausibly require table data (e.g. "compare", "which is faster",
-   numeric/tabular facts) or image/diagram data (e.g. "explain the architecture/diagram/figure")?
-5. RESPONSE FORMAT: Pick the contract the executor should follow: "comparison" (vs/difference/trade-offs),
+4. SOURCE & VISUAL NEEDS (Cognitive Evaluation):
+   - Evaluate whether a visual substantially improves pedagogical clarity:
+     * `requires_image_data`: true if the question refers to a visual figure, diagram, chart, or slide image in the document, or if answering it strongly benefits from visual document context.
+     * `visual_modality`:
+       - "document_figure": Student asks to see, locate, or inspect a specific figure, architecture slide, diagram, or chart from the uploaded material.
+       - "generative_diagram": The concept involves workflows, sequential pipelines, architecture, state machines, lifecycles, or decision trees that should be rendered as a clear Mermaid.js diagram.
+       - "none": A pure text or mathematical explanation is optimal.
+     * `suggested_diagram_type`: "flowchart" | "sequenceDiagram" | "stateDiagram" | "classDiagram" | "mindmap" | null.
+5. LENGTH & CONSTRAINTS (Cognitive Detection):
+   - Evaluate if the student specified a specific length, directness, or brevity constraint:
+     * `length_constraint`:
+       - "one_word": Student explicitly asked for a single word, exact term, name, or acronym (e.g. "in one word", "single word answer").
+       - "one_sentence": Student explicitly asked for 1 sentence (e.g. "in one sentence", "one-line definition").
+       - "one_paragraph": Student explicitly asked for a single paragraph (e.g. "in one paragraph", "single paragraph explanation").
+       - "concise": Student asked to be brief / short / tl;dr / quick overview without full essays.
+       - "comprehensive": Student asked for detailed / in-depth / exhaustive explanation.
+       - null: No explicit length restriction stated.
+     * `output_style`:
+       - "direct_answer_only": Student explicitly demands only the answer without intro hooks, pleasantries, or extra scaffolding (e.g. "answer only", "just the answer", "no fluff", "directly answer").
+       - "table": Student explicitly asks for tabular comparison, columns and rows, or matrix (e.g. "in a table", "tabular format", "show as a table").
+       - "bullet_summary": Student explicitly asks for bullet points or summary list (e.g. "summary", "bullet points summary", "give me 3 bullets").
+       - "diagram": Architecture / workflow / visual diagram requested.
+       - "standard": Standard natural pedagogical explanation.
+     * `suppress_scaffolding`: true if the student asked for "answer only", "one word", "no pleasantries", "direct answer", or "no quiz/follow-up", instructing the tutor to omit conversational hooks and follow-up questions. Otherwise false.
+6. RESPONSE FORMAT: Pick the contract the executor should follow: "comparison" (vs/difference/trade-offs),
    "list" (bullet points / enumerate), "diagram" (architecture/figure/visual explanation), "quiz"
    (test me / ask me questions), "study_plan" (timetable / roadmap), "study_notes" (standalone reference
    document/cheat sheet/notes), or "conceptual" (default explanation).
    - study_notes: student wants a standalone reference document (notes/cheat sheet), not a conversational
      answer. Trigger only on explicit requests ("notes", "cheat sheet", "study map", "summarize as notes") — a
      plain question ("what is X") stays "conceptual" even if the answer could double as notes.
-6. CONFIDENCE: Rate 0.0-1.0 how confident you are in this classification. Use < 0.5 only when the message
+7. CONFIDENCE: Rate 0.0-1.0 how confident you are in this classification. Use < 0.5 only when the message
    is genuinely ambiguous (e.g. a single vague word with no context).
 
 CRITICAL RULES:
@@ -82,8 +104,13 @@ Respond with ONLY this JSON object, no preamble, no markdown fences:
   "search_queries": ["query 1", "query 2"],
   "extracted_subject": "Clean broad subject name if declaring new subject, else null",
   "response_format": "comparison" | "list" | "diagram" | "quiz" | "study_plan" | "study_notes" | "conceptual",
+  "length_constraint": "one_word" | "one_sentence" | "one_paragraph" | "concise" | "comprehensive" | null,
+  "output_style": "direct_answer_only" | "table" | "bullet_summary" | "diagram" | "standard",
+  "suppress_scaffolding": true | false,
   "requires_table_data": true | false,
   "requires_image_data": true | false,
+  "visual_modality": "document_figure" | "generative_diagram" | "none",
+  "suggested_diagram_type": "flowchart" | "sequenceDiagram" | "stateDiagram" | "classDiagram" | "mindmap" | null,
   "confidence": 0.0,
   "needs_clarification": true | false,
   "recommended_action": "EXPLAIN" | "QUIZ_QUESTION" | "EVALUATE_ANSWER" | "GENERATE_PLAN" | "SET_SUBJECT" | "GREET"
@@ -104,8 +131,13 @@ class QueryPlan:
     search_queries: List[str] = field(default_factory=list)
     extracted_subject: Optional[str] = None
     response_format: str = "conceptual"
+    length_constraint: Optional[str] = None
+    output_style: str = "standard"
+    suppress_scaffolding: bool = False
     requires_table_data: bool = False
     requires_image_data: bool = False
+    visual_modality: str = "none"
+    suggested_diagram_type: Optional[str] = None
     confidence: float = 0.7
     needs_clarification: bool = False
     recommended_action: str = "EXPLAIN"
@@ -269,6 +301,30 @@ class QueryAnalyzerAgent:
 
         needs_clarification = bool(data.get("needs_clarification", False)) or confidence < _LOW_CONFIDENCE_THRESHOLD
 
+        visual_modality = str(data.get("visual_modality") or "none").strip().lower()
+        if visual_modality not in ["document_figure", "generative_diagram", "none"]:
+            visual_modality = "generative_diagram" if bool(data.get("requires_image_data")) else "none"
+
+        suggested_diagram_type = data.get("suggested_diagram_type")
+
+        # Cognitive constraint parsing
+        raw_len = data.get("length_constraint")
+        length_constraint = None
+        if raw_len:
+            clean_len = str(raw_len).strip().lower()
+            if clean_len in ["one_word", "one_sentence", "one_paragraph", "concise", "comprehensive"]:
+                length_constraint = clean_len
+
+        raw_style = str(data.get("output_style") or "standard").strip().lower()
+        if raw_style in ["direct_answer_only", "table", "bullet_summary", "diagram", "standard"]:
+            output_style = raw_style
+        else:
+            output_style = "standard"
+
+        suppress_scaffolding = bool(data.get("suppress_scaffolding", False))
+        if length_constraint in ["one_word", "one_sentence"] or output_style == "direct_answer_only":
+            suppress_scaffolding = True
+
         return QueryPlan(
             intent=intent,
             reasoning=str(data.get("reasoning", "")).strip(),
@@ -277,8 +333,13 @@ class QueryAnalyzerAgent:
             search_queries=search_queries,
             extracted_subject=extracted_subject,
             response_format=data.get("response_format") or "conceptual",
-            requires_table_data=bool(data.get("requires_table_data", False)),
-            requires_image_data=bool(data.get("requires_image_data", False)),
+            length_constraint=length_constraint,
+            output_style=output_style,
+            suppress_scaffolding=suppress_scaffolding,
+            requires_table_data=bool(data.get("requires_table_data", False)) or output_style == "table",
+            requires_image_data=bool(data.get("requires_image_data", False)) or visual_modality != "none",
+            visual_modality=visual_modality,
+            suggested_diagram_type=suggested_diagram_type,
             confidence=confidence,
             needs_clarification=needs_clarification,
             recommended_action=data.get("recommended_action") or "EXPLAIN",
@@ -298,6 +359,31 @@ class QueryAnalyzerAgent:
         is_quiz = bool(re.search(r"\b(quiz|test me|ask me|practice questions)\b", lower))
         is_comparison = bool(re.search(r"\b(vs|versus|compare|difference|trade-?offs?)\b", lower))
         is_diagram = bool(re.search(r"\b(diagram|architecture|figure|visual|image)\b", lower))
+
+        # Heuristic length & style detection
+        length_constraint = None
+        if bool(re.search(r"\b(one word|single word|just the word|word only)\b", lower)):
+            length_constraint = "one_word"
+        elif bool(re.search(r"\b(one sentence|single sentence|in a sentence)\b", lower)):
+            length_constraint = "one_sentence"
+        elif bool(re.search(r"\b(one paragraph|single paragraph)\b", lower)):
+            length_constraint = "one_paragraph"
+        elif bool(re.search(r"\b(brief|concise|shortly|tl;?dr)\b", lower)):
+            length_constraint = "concise"
+
+        output_style = "standard"
+        if bool(re.search(r"\b(table|tabular|columns and rows)\b", lower)):
+            output_style = "table"
+        elif bool(re.search(r"\b(summary|bullet points?|bullet list|bullets)\b", lower)):
+            output_style = "bullet_summary"
+        elif bool(re.search(r"\b(answer only|direct answer|just the answer|no intro|no explanation)\b", lower)):
+            output_style = "direct_answer_only"
+
+        suppress_scaffolding = (
+            length_constraint in ["one_word", "one_sentence"]
+            or output_style == "direct_answer_only"
+            or bool(re.search(r"\b(answer only|no pleasantries|no follow-?up|no chit-?chat)\b", lower))
+        )
 
         if is_study_notes:
             clean_topic = _clean_topic_string(
@@ -341,7 +427,10 @@ class QueryAnalyzerAgent:
                 target_topic=topic,
                 search_queries=[q for q in [topic, raw_msg] if q],
                 response_format=fmt,
-                requires_table_data=is_comparison,
+                length_constraint=length_constraint,
+                output_style=output_style,
+                suppress_scaffolding=suppress_scaffolding,
+                requires_table_data=is_comparison or output_style == "table",
                 requires_image_data=is_diagram,
                 confidence=0.4,
                 needs_clarification=False,
