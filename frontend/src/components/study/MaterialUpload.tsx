@@ -145,7 +145,7 @@ export default function MaterialUpload({
                 </h3>
                 <p className="text-xs text-slate-500 flex items-center gap-1.5">
                   <Eye size={13} className="text-orange-500" />
-                  <span>Gemini VLM structure scanner active (target &lt; 5s)</span>
+                  <span>gpt 6.0 sol structure scanner active</span>
                 </p>
 
                 {/* Shimmer progress bar */}

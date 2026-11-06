@@ -1,6 +1,6 @@
 """
-Unified Google Gemini API Client (for LLM Text Generation & Streaming).
-Uses Google Gemini 3.5 Flash-Lite / 3.5 Flash / 3.6 Flash with automatic rate-limit cascade.
+Dedicated LLM Client for gpt-6-sol via Azure OpenAI (and standard OpenAI).
+Supports full chat generation, SSE token streaming, and automatic parameter adaptation for reasoning models.
 """
 import os
 import json
@@ -10,157 +10,251 @@ from pathlib import Path
 from typing import AsyncGenerator, List, Dict, Optional, Any
 from dotenv import dotenv_values
 
-CASCADE_MODELS = [
-    "gemini-3.5-flash-lite",
-    "gemini-3.6-flash",
-    "gemini-flash-latest",
-    "gemini-3.7-flash",
-    "gemini-3.5-flash",
-]
 
-
-def _get_active_gemini_key() -> str:
-    """Reads latest GEMINI_API_KEY from .env dynamically to prevent stale cached values."""
+def _get_active_env() -> Dict[str, str]:
+    """Reads latest values from .env dynamically."""
     env_path = Path(__file__).resolve().parent.parent.parent / ".env"
+    vals = {}
     if env_path.exists():
         vals = dotenv_values(env_path)
-        key = vals.get("GEMINI_API_KEY", "")
-        if key and key.strip() and key != "your_gemini_api_key_here":
-            return key.strip()
-    return os.environ.get("GEMINI_API_KEY") or os.environ.get("GOOGLE_API_KEY") or ""
+    raw_dep = (vals.get("AZURE_OPENAI_DEPLOYMENT_NAME") or os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME") or "gpt-6-sol").strip()
+    # Normalize model deployment name
+    if any(alias in raw_dep.lower() for alias in ["gpt 6.0 sol", "gpt-6.0-sol", "gpt 6 sol", "gpt-6-sol", "gpt6"]):
+        deployment = "gpt-6-sol"
+    else:
+        deployment = raw_dep
+
+    return {
+        "AZURE_OPENAI_API_KEY": (vals.get("AZURE_OPENAI_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY") or "").strip(),
+        "AZURE_OPENAI_ENDPOINT": (vals.get("AZURE_OPENAI_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT") or "").strip(),
+        "AZURE_OPENAI_DEPLOYMENT_NAME": deployment,
+        "AZURE_OPENAI_API_VERSION": (vals.get("AZURE_OPENAI_API_VERSION") or os.environ.get("AZURE_OPENAI_API_VERSION") or "2024-06-01").strip(),
+        "OPENAI_API_KEY": (vals.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip(),
+        "OPENAI_BASE_URL": (vals.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").strip(),
+        "OPENAI_MODEL": deployment,
+    }
 
 
-def _get_active_gemini_model() -> str:
-    env_path = Path(__file__).resolve().parent.parent.parent / ".env"
-    if env_path.exists():
-        vals = dotenv_values(env_path)
-        model = vals.get("GEMINI_MODEL", "")
-        if model and model.strip():
-            return model.strip()
-    return "gemini-3.5-flash-lite"
+def _clean_azure_base(endpoint: str) -> str:
+    """Extracts base host URL from any Azure AI endpoint."""
+    ep = endpoint.strip().rstrip("/")
+    for suffix in ["/openai/v1/responses", "/openai/v1/chat/completions", "/openai/v1", "/openai"]:
+        if ep.endswith(suffix):
+            ep = ep[:-len(suffix)].rstrip("/")
+    return ep
 
 
+def _build_azure_chat_url(endpoint: str, deployment: str, api_version: str) -> str:
+    """Builds Azure OpenAI completions URL."""
+    base = _clean_azure_base(endpoint)
+    return f"{base}/openai/deployments/{deployment}/chat/completions?api-version={api_version}"
 
-class GeminiClient:
+
+class GptSolClient:
     """
-    Google Gemini Client with automatic rate limit fallback and streaming.
+    LLM Client powered by gpt-6-sol with reasoning token adaptation.
     """
 
     def __init__(self):
-        self.base_url = "https://generativelanguage.googleapis.com/v1beta"
-        self.timeout = 30.0
+        self.timeout = 45.0
 
     @property
     def api_key(self) -> str:
-        return _get_active_gemini_key()
+        env = _get_active_env()
+        return env["AZURE_OPENAI_API_KEY"] or env["OPENAI_API_KEY"]
 
     @property
     def model(self) -> str:
-        return _get_active_gemini_model()
+        env = _get_active_env()
+        return env["AZURE_OPENAI_DEPLOYMENT_NAME"] or env["OPENAI_MODEL"] or "gpt-6-sol"
 
     async def is_available(self) -> bool:
-        key = self.api_key
-        return bool(key and len(key.strip()) > 10 and key != "your_gemini_api_key_here")
+        env = _get_active_env()
+        has_azure = bool(env["AZURE_OPENAI_API_KEY"] and env["AZURE_OPENAI_ENDPOINT"] and len(env["AZURE_OPENAI_API_KEY"]) > 5)
+        has_openai = bool(env["OPENAI_API_KEY"] and len(env["OPENAI_API_KEY"]) > 10)
+        return has_azure or has_openai
 
-    def _format_payload(self, messages: List[Dict[str, str]], temperature: float = 0.3) -> Dict[str, Any]:
-        system_texts = []
-        conversation_turns: List[Dict[str, Any]] = []
-
-        for m in messages:
-            role = m.get("role", "user")
-            content = m.get("content", "")
-            if not content:
-                continue
-
-            if role == "system":
-                system_texts.append(content)
-            elif role in ["user", "human"]:
-                if conversation_turns and conversation_turns[-1]["role"] == "user":
-                    conversation_turns[-1]["parts"][0]["text"] += f"\n\n{content}"
-                else:
-                    conversation_turns.append({
-                        "role": "user",
-                        "parts": [{"text": content}]
-                    })
-            elif role in ["model", "assistant"]:
-                if conversation_turns and conversation_turns[-1]["role"] == "model":
-                    conversation_turns[-1]["parts"][0]["text"] += f"\n\n{content}"
-                else:
-                    conversation_turns.append({
-                        "role": "model",
-                        "parts": [{"text": content}]
-                    })
-
-        if not conversation_turns:
-            conversation_turns.append({
-                "role": "user",
-                "parts": [{"text": "Hello"}]
-            })
-        elif conversation_turns[0]["role"] != "user":
-            conversation_turns.insert(0, {
-                "role": "user",
-                "parts": [{"text": "Hello"}]
-            })
-
+    def _build_payload(self, messages: List[Dict[str, str]], deployment: str, temperature: float = 0.3, stream: bool = False) -> Dict[str, Any]:
+        """Constructs payload adapting for reasoning models like gpt-6-sol (max_completion_tokens, no custom temperature)."""
+        is_reasoning = any(k in deployment.lower() for k in ["gpt-6", "o1", "o3", "sol"])
         payload: Dict[str, Any] = {
-            "contents": conversation_turns,
-            "generationConfig": {
-                "temperature": temperature,
-                "maxOutputTokens": 4096,
-            },
+            "messages": messages,
         }
 
-        if system_texts:
-            payload["systemInstruction"] = {
-                "parts": [{"text": "\n\n".join(system_texts)}]
-            }
+        if is_reasoning:
+            # Reasoning models require max_completion_tokens and do not support custom temperature
+            payload["max_completion_tokens"] = 4096
+        else:
+            payload["max_tokens"] = 4096
+            payload["temperature"] = temperature
+
+        if stream:
+            payload["stream"] = True
 
         return payload
 
+    # ─── AZURE OPENAI DISPATCH (gpt-6-sol) ──────────────────────────────────
+    async def _chat_azure(self, env: Dict[str, str], messages: List[Dict[str, str]], temperature: float) -> Optional[str]:
+        headers = {
+            "api-key": env["AZURE_OPENAI_API_KEY"],
+            "Content-Type": "application/json",
+        }
+        deployment = env["AZURE_OPENAI_DEPLOYMENT_NAME"]
+        payload = self._build_payload(messages, deployment, temperature=temperature, stream=False)
+
+        url1 = _build_azure_chat_url(env["AZURE_OPENAI_ENDPOINT"], deployment, env["AZURE_OPENAI_API_VERSION"])
+        base = _clean_azure_base(env["AZURE_OPENAI_ENDPOINT"])
+        url2 = f"{base}/openai/v1/chat/completions"
+
+        attempts = [
+            (url1, payload),
+            (url2, {**payload, "model": deployment}),
+        ]
+
+        for target_url, target_payload in attempts:
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    r = await client.post(target_url, headers=headers, json=target_payload)
+                    if r.status_code == 200:
+                        data = r.json()
+                        choices = data.get("choices", [])
+                        if choices:
+                            content = choices[0].get("message", {}).get("content", "")
+                            if content and content.strip():
+                                return content.strip()
+                    else:
+                        print(f"[gpt-6-sol] API returned {r.status_code} on {target_url}: {r.text[:140]}")
+            except Exception as e:
+                print(f"[gpt-6-sol] Chat exception on {target_url}: {e}")
+        return None
+
+    async def _stream_azure(self, env: Dict[str, str], messages: List[Dict[str, str]], temperature: float) -> AsyncGenerator[str, None]:
+        headers = {
+            "api-key": env["AZURE_OPENAI_API_KEY"],
+            "Content-Type": "application/json",
+        }
+        deployment = env["AZURE_OPENAI_DEPLOYMENT_NAME"]
+        payload = self._build_payload(messages, deployment, temperature=temperature, stream=True)
+
+        url1 = _build_azure_chat_url(env["AZURE_OPENAI_ENDPOINT"], deployment, env["AZURE_OPENAI_API_VERSION"])
+        base = _clean_azure_base(env["AZURE_OPENAI_ENDPOINT"])
+        url2 = f"{base}/openai/v1/chat/completions"
+
+        attempts = [
+            (url1, payload),
+            (url2, {**payload, "model": deployment}),
+        ]
+
+        for target_url, target_payload in attempts:
+            succeeded = False
+            try:
+                async with httpx.AsyncClient(timeout=self.timeout) as client:
+                    async with client.stream("POST", target_url, headers=headers, json=target_payload) as response:
+                        if response.status_code != 200:
+                            print(f"[gpt-6-sol] Stream request returned {response.status_code}: {target_url}")
+                            continue
+                        async for line in response.aiter_lines():
+                            line = line.strip()
+                            if not line or not line.startswith("data: "):
+                                continue
+                            raw = line[6:].strip()
+                            if raw == "[DONE]":
+                                break
+                            try:
+                                data = json.loads(raw)
+                                choices = data.get("choices", [])
+                                if choices:
+                                    delta = choices[0].get("delta", {})
+                                    token = delta.get("content", "")
+                                    if token:
+                                        succeeded = True
+                                        yield token
+                            except Exception:
+                                continue
+                if succeeded:
+                    return
+            except Exception as e:
+                print(f"[gpt-6-sol] Stream exception on {target_url}: {e}")
+
+    # ─── STANDARD OPENAI DISPATCH ──────────────────────────────────────────────
+    async def _chat_openai(self, env: Dict[str, str], messages: List[Dict[str, str]], temperature: float) -> Optional[str]:
+        url = f"{env['OPENAI_BASE_URL'].rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {env['OPENAI_API_KEY']}",
+            "Content-Type": "application/json",
+        }
+        model = env["OPENAI_MODEL"]
+        payload = self._build_payload(messages, model, temperature=temperature, stream=False)
+        payload["model"] = model
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                r = await client.post(url, headers=headers, json=payload)
+                if r.status_code == 200:
+                    data = r.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        return choices[0].get("message", {}).get("content", "")
+        except Exception as e:
+            print(f"[gpt-6-sol] OpenAI chat exception: {e}")
+        return None
+
+    async def _stream_openai(self, env: Dict[str, str], messages: List[Dict[str, str]], temperature: float) -> AsyncGenerator[str, None]:
+        url = f"{env['OPENAI_BASE_URL'].rstrip('/')}/chat/completions"
+        headers = {
+            "Authorization": f"Bearer {env['OPENAI_API_KEY']}",
+            "Content-Type": "application/json",
+        }
+        model = env["OPENAI_MODEL"]
+        payload = self._build_payload(messages, model, temperature=temperature, stream=True)
+        payload["model"] = model
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream("POST", url, headers=headers, json=payload) as response:
+                    if response.status_code != 200:
+                        return
+                    async for line in response.aiter_lines():
+                        line = line.strip()
+                        if not line or not line.startswith("data: "):
+                            continue
+                        raw = line[6:].strip()
+                        if raw == "[DONE]":
+                            break
+                        try:
+                            data = json.loads(raw)
+                            choices = data.get("choices", [])
+                            if choices:
+                                delta = choices[0].get("delta", {})
+                                token = delta.get("content", "")
+                                if token:
+                                    yield token
+                        except Exception:
+                            continue
+        except Exception as e:
+            print(f"[gpt-6-sol] OpenAI stream exception: {e}")
+
+    # ─── UNIFIED INTERFACE ──────────────────────────────────────────────────────
     async def chat(
         self,
         messages: List[Dict[str, str]],
         model: Optional[str] = None,
         temperature: float = 0.3,
     ) -> str:
-        """Single chat generation with automatic model fallback cascade."""
-        key = self.api_key
-        if not key or len(key.strip()) < 10 or key == "your_gemini_api_key_here":
-            return "⚠️ Gemini API key is missing. Please set your GEMINI_API_KEY in backend/.env."
+        """Single chat generation with gpt-6-sol."""
+        env = _get_active_env()
 
-        preferred = model or self.model
-        models_to_try = [preferred] + [m for m in CASCADE_MODELS if m != preferred]
-        payload = self._format_payload(messages, temperature=temperature)
+        # 1. Try Azure OpenAI (gpt-6-sol)
+        if env["AZURE_OPENAI_API_KEY"] and env["AZURE_OPENAI_ENDPOINT"]:
+            result = await self._chat_azure(env, messages, temperature)
+            if result:
+                return result
 
-        last_error = None
-        for target_model in models_to_try:
-            url = f"{self.base_url}/models/{target_model}:generateContent?key={key}"
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    r = await client.post(url, json=payload)
-                    if r.status_code == 200:
-                        data = r.json()
-                        text = (
-                            data.get("candidates", [{}])[0]
-                            .get("content", {})
-                            .get("parts", [{}])[0]
-                            .get("text", "")
-                        )
-                        if text:
-                            return text
-                    elif r.status_code in [429, 404, 503]:
-                        print(f"[GeminiClient] {target_model} returned {r.status_code}, trying fallback...")
-                        await asyncio.sleep(0.5)
-                        continue
-                    else:
-                        error_detail = r.text
-                        print(f"[GeminiClient] {target_model} returned error status {r.status_code}: {error_detail}")
-                        continue
-            except Exception as e:
-                last_error = e
-                continue
+        # 2. Try Standard OpenAI
+        if env["OPENAI_API_KEY"]:
+            result = await self._chat_openai(env, messages, temperature)
+            if result:
+                return result
 
-        print(f"[GeminiClient] All models failed. Last error: {last_error}")
+        # 3. Fallback when network is unavailable
         return self._generate_intelligent_offline_response(messages)
 
     async def stream(
@@ -169,57 +263,37 @@ class GeminiClient:
         model: Optional[str] = None,
         temperature: float = 0.3,
     ) -> AsyncGenerator[str, None]:
-        """Streaming token generation via Google Gemini with cascade."""
-        key = self.api_key
-        if not key or len(key.strip()) < 10 or key == "your_gemini_api_key_here":
-            yield "⚠️ Gemini API key is missing. Please set your GEMINI_API_KEY in backend/.env."
-            return
+        """Streaming token generation with gpt-6-sol."""
+        env = _get_active_env()
 
-        preferred = model or self.model
-        models_to_try = [preferred] + [m for m in CASCADE_MODELS if m != preferred]
-        payload = self._format_payload(messages, temperature=temperature)
+        # 1. Azure OpenAI (gpt-6-sol)
+        if env["AZURE_OPENAI_API_KEY"] and env["AZURE_OPENAI_ENDPOINT"]:
+            streamed = False
+            async for token in self._stream_azure(env, messages, temperature):
+                streamed = True
+                yield token
+            if streamed:
+                return
 
-        stream_succeeded = False
-        for target_model in models_to_try:
-            url = f"{self.base_url}/models/{target_model}:streamGenerateContent?alt=sse&key={key}"
-            try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    async with client.stream("POST", url, json=payload) as response:
-                        if response.status_code != 200:
-                            continue
-                        async for line in response.aiter_lines():
-                            if not line.strip():
-                                continue
-                            if line.startswith("data: "):
-                                raw = line[6:]
-                                try:
-                                    data = json.loads(raw)
-                                    parts = (
-                                        data.get("candidates", [{}])[0]
-                                        .get("content", {})
-                                        .get("parts", [])
-                                    )
-                                    for part in parts:
-                                        text_token = part.get("text", "")
-                                        if text_token:
-                                            stream_succeeded = True
-                                            yield text_token
-                                except Exception:
-                                    continue
-                if stream_succeeded:
-                    return
-            except Exception:
-                continue
+        # 2. Standard OpenAI
+        if env["OPENAI_API_KEY"]:
+            streamed = False
+            async for token in self._stream_openai(env, messages, temperature):
+                streamed = True
+                yield token
+            if streamed:
+                return
 
-        # If streaming didn't produce tokens, provide graceful fallback
+        # 3. Fallback streaming
         fallback_text = self._generate_intelligent_offline_response(messages)
         for word in fallback_text.split(" "):
             yield word + " "
             await asyncio.sleep(0.02)
 
+    # Aliases
+    chat_stream = stream
+
     def _generate_intelligent_offline_response(self, messages: List[Dict[str, str]]) -> str:
-        """Smart curriculum synthesizer when API rate limits are temporarily active."""
-        last_msg = messages[-1].get("content", "") if messages else ""
         return (
             f"### 🎯 Core Principles & Mechanisms\n\n"
             f"**Key Overview**: This topic represents a foundational pillar. It establishes the mathematical and algorithmic basis needed for advanced analysis and problem solving.\n\n"
@@ -230,5 +304,8 @@ class GeminiClient:
         )
 
 
-# Singleton instance
-ollama = GeminiClient()
+# Global instances and aliases
+llm_client = GptSolClient()
+GeminiClient = GptSolClient
+ollama = llm_client
+CASCADE_MODELS = ["gpt-6-sol"]

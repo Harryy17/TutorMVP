@@ -16,20 +16,26 @@ async def lifespan(app: FastAPI):
     # Startup: ensure upload & data folders exist
     Path(settings.UPLOAD_DIR).mkdir(parents=True, exist_ok=True)
     print(f"[START] {settings.APP_NAME} - Study Room Engine Ready")
-    print(f"[LLM]   NVIDIA NIM: {settings.NVIDIA_CHAT_MODEL}")
-    print(f"[VLM]   Google Gemini: {settings.GEMINI_MODEL}")
+    if settings.AZURE_OPENAI_ENDPOINT and settings.AZURE_OPENAI_API_KEY:
+        print(f"[LLM & VLM] Model: {settings.AZURE_OPENAI_DEPLOYMENT_NAME} (Azure OpenAI: {settings.AZURE_OPENAI_ENDPOINT})")
+    elif settings.OPENAI_API_KEY:
+        print(f"[LLM & VLM] Model: {settings.OPENAI_MODEL} (OpenAI)")
+    else:
+        print(f"[LLM & VLM] Model: {settings.AZURE_OPENAI_DEPLOYMENT_NAME} (Offline Fallback)")
     print(f"[S3]    AWS Cloud Storage: {settings.AWS_S3_BUCKET_NAME} ({settings.AWS_REGION})")
 
-    # Cloud Data Sync: Restore missing session databases & registry from AWS S3
+    # PostgreSQL + pgvector Database
     try:
-        from app.core.s3_client import s3_storage
-        from app.rag.session_manager import DATA_DIR
-        if s3_storage.is_configured():
-            restored = s3_storage.restore_data_from_s3(DATA_DIR)
-            if restored > 0:
-                print(f"[S3Storage] Restored {restored} session database(s) from AWS S3 cloud backup.")
-    except Exception as e:
-        print(f"[S3Storage] Startup cloud restore note: {e}")
+        from app.rag.pgvector_store import pgvector_store
+        if pgvector_store.is_configured():
+            if pgvector_store.initialize_schema():
+                print(f"[DB]    PostgreSQL + pgvector: Connected & tables ready")
+            else:
+                print(f"[DB]    PostgreSQL: Connection attempted")
+        else:
+            print(f"[DB]    pgvector_store active (set POSTGRES_URL to sync directly with Supabase)")
+    except Exception as db_err:
+        print(f"[DB]    PostgreSQL check note: {db_err}")
 
     yield
     print("[STOP] Shutting down...")
@@ -37,7 +43,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(
     title="Indie Tutor — AI Study Room API",
-    description="Interactive Study Room Backend with Gemini VLM & NVIDIA NIM",
+    description="Interactive Study Room Backend powered by gpt 6.0 sol with Azure OpenAI & pgvector",
     version="1.0.0",
     lifespan=lifespan,
 )

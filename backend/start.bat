@@ -1,46 +1,59 @@
 @echo off
+setlocal enabledelayedexpansion
 echo.
 echo ================================================
-echo   DeepTutor Backend - GraphRAG + Ollama
+echo   DeepTutor Backend - Study Room Engine
 echo ================================================
 echo.
 
-REM Check Python
+REM Detect Python executable
+set "PYTHON_CMD="
 python --version >nul 2>&1
-if errorlevel 1 (
-    echo [ERROR] Python not found. Install from https://python.org
+if not errorlevel 1 (
+    set "PYTHON_CMD=python"
+) else (
+    py -0 >nul 2>&1
+    if not errorlevel 1 (
+        set "PYTHON_CMD=py"
+    ) else if exist "%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe" (
+        set "PYTHON_CMD=%LOCALAPPDATA%\Python\pythoncore-3.14-64\python.exe"
+    ) else if exist "%LOCALAPPDATA%\Programs\Python\Python312\python.exe" (
+        set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python312\python.exe"
+    ) else if exist "%LOCALAPPDATA%\Programs\Python\Python311\python.exe" (
+        set "PYTHON_CMD=%LOCALAPPDATA%\Programs\Python\Python311\python.exe"
+    )
+)
+
+if "%PYTHON_CMD%"=="" (
+    echo [ERROR] Python not found. Please install Python 3.10+ from https://python.org
     pause & exit /b 1
 )
 
+echo [1/3] Using Python: %PYTHON_CMD%
+
 REM Create virtualenv if needed
-if not exist ".venv" (
-    echo [1/4] Creating virtual environment...
-    python -m venv .venv
+if not exist ".venv\Scripts\activate.bat" (
+    echo [2/3] Creating virtual environment (.venv)...
+    "%PYTHON_CMD%" -m venv .venv
 )
 
-REM Activate
+REM Activate virtualenv
 call .venv\Scripts\activate.bat
 
 REM Install deps
-echo [2/4] Installing dependencies...
-pip install -r requirements.txt -q
+echo [3/3] Checking dependencies...
+python -m pip install -r requirements.txt -q
 
-REM Check Ollama
-echo [3/4] Checking Ollama...
-curl -s http://localhost:11434/api/tags >nul 2>&1
-if errorlevel 1 (
-    echo.
-    echo [WARNING] Ollama is not running!
-    echo   Start it with: ollama serve
-    echo   Pull a model:  ollama pull llama3.1
-    echo   Pull embeddings: ollama pull nomic-embed-text
-    echo.
-    echo   The server will start anyway - connect Ollama before chatting.
-    echo.
+REM Check .env exists
+if not exist ".env" (
+    if exist ".env.example" (
+        copy .env.example .env >nul
+        echo [INFO] Created .env file from .env.example.
+    )
 )
 
-REM Start FastAPI
-echo [4/4] Starting FastAPI server on http://localhost:8000
-echo   API Docs: http://localhost:8000/docs
+echo.
+echo Starting FastAPI server at http://localhost:8000
+echo API Documentation: http://localhost:8000/docs
 echo.
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000

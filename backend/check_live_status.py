@@ -32,10 +32,10 @@ def check_all():
     except Exception as e:
         print("   Status      : FAILED -", e)
 
-    # 2. Google Gemini VLM Check
-    print("\n2. [Google Gemini VLM / LLM]")
+    # 2. Azure OpenAI (gpt 6.0 sol) Check
+    print("\n2. [Azure OpenAI - gpt 6.0 sol]")
     print("   Configured  :", vlm_client.is_configured())
-    print("   Model Target: gemini-3.5-flash-lite / gemini-3.5-flash / gemini-3.6-flash")
+    print("   Model Target: gpt 6.0 sol")
 
     # 3. Local Backend Server Check
     print("\n3. [FastAPI Backend Service]")

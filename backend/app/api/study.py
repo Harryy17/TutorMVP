@@ -199,6 +199,21 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
             session_id=body.session_id,
         )
 
+    # 3. If query asks for topics, curriculum, or overview, inject session topics into context
+    session_topics = []
+    if body.session_id and body.session_id in _study_sessions:
+        session_topics = _study_sessions[body.session_id].get("topics", [])
+    elif body.session_id:
+        saved_state = session_manager.get_session_state(body.session_id)
+        if saved_state:
+            session_topics = saved_state.get("topics", [])
+
+    is_topic_query = any(k in body.message.lower() for k in ["topic", "module", "chapter", "syllabus", "overview", "what are we studying", "summary", "outline"])
+    if is_topic_query and session_topics:
+        topic_lines = [f"- Module {i+1}: {t.get('title')} ({t.get('summary', '')})" for i, t in enumerate(session_topics)]
+        curriculum_context = "[Curriculum Roadmap & Topics for this Course]:\n" + "\n".join(topic_lines)
+        context = f"{curriculum_context}\n\n{context}".strip()
+
     decision = await decision_agent.analyze_and_respond(
         message=body.message,
         current_subject=body.current_subject,
@@ -325,18 +340,24 @@ async def upload_study_material(
         _safe_extract_topics(),
     )
 
+    doc_rec = doc_processor.get_document(study_id)
+    has_chunks = bool(doc_rec and doc_rec.chunks)
+
     is_study_material = extraction_result.get("is_study_material", True)
+    if has_chunks and not is_study_material:
+        # If text/slides were successfully extracted, allow studying from it
+        is_study_material = True
+
     detected_document_type = extraction_result.get("detected_document_type", "Study Material")
     validation_reason = extraction_result.get("validation_reason", "")
 
     # Stage 2 & 3: Background Enrichment (async, non-blocking) only if valid study material
     if is_study_material:
         asyncio.create_task(doc_processor.run_background_enrichment(study_id))
-    else:
+    elif not has_chunks:
         try:
-            from app.rag.sqlite_fts_store import get_session_store
-            store = get_session_store(study_id)
-            store.clear_all()
+            from app.rag.pgvector_store import pgvector_store
+            pgvector_store.delete_document(study_id)
         except Exception as e:
             print(f"[StudyAPI] Non-study material cleanup note: {e}")
     topics = extraction_result.get("topics", [])

@@ -13,7 +13,7 @@ import pypdf
 
 import httpx
 from app.core.config import get_settings
-from app.rag.ollama_client import ollama, CASCADE_MODELS
+from app.rag.ollama_client import ollama
 from app.rag.vlm_client import vlm_client
 
 settings = get_settings()
@@ -70,8 +70,8 @@ Analyze the uploaded document content.
 
 STEP 1: Content Relevance Classification
 Classify the document into one of the 6 standardized categories:
-- "STUDY_MATERIAL": textbook chapters, lecture notes/slides, syllabi, academic papers, question banks, course problem sets. (is_study_material: true)
-- "REFERENCE_NONACADEMIC": wiki articles, manuals, how-to guides, news articles. (is_study_material: false)
+- "STUDY_MATERIAL": textbook chapters, lecture notes/slides, pitch and presentation decks, product/technical specifications (PRDs), engineering guides, syllabi, academic papers, question banks, course problem sets. (is_study_material: true)
+- "REFERENCE_NONACADEMIC": general news journalism, gossip articles. (is_study_material: false)
 - "PERSONAL": resumes/CVs, personal letters, chat logs, journals. (is_study_material: false)
 - "COMMERCIAL": invoices, receipts, advertisements, contracts, terms of service. (is_study_material: false)
 - "CREATIVE": fiction stories, poetry, scripts, lyrics. (is_study_material: false)
@@ -209,7 +209,7 @@ class TopicExtractor:
         subject_clean = (subject or "General Subject").strip()
         path = Path(file_path)
 
-        # Case 1: Standalone Image file -> Directly use Gemini VLM
+        # Case 1: Standalone Image file -> Directly use VLM (gpt 6.0 sol)
         if self._is_image_file(file_path):
             try:
                 with open(file_path, "rb") as f:
@@ -230,7 +230,7 @@ class TopicExtractor:
 
             # If PDF has virtually no extractable digital text, it's a scanned PDF -> use VLM
             if len(text_sample.strip()) < 80:
-                print("[TopicExtractor] Scanned PDF detected (no digital text found), routing to Gemini VLM...")
+                print("[TopicExtractor] Scanned PDF detected (no digital text found), routing to gpt 6.0 sol VLM...")
                 page_img = vlm_client.render_pdf_page_to_image(file_path, page_idx=0, dpi=150)
                 if page_img:
                     vlm_topics = await vlm_client.analyze_scanned_image(
@@ -285,14 +285,14 @@ class TopicExtractor:
                 subject=subject_clean, text_sample=truncated
             )
 
-            # Attempt 1: Fast LLM (Ollama / Gemini cascade)
+            # Topic extraction via gpt 6.0 sol
             try:
                 response = await asyncio.wait_for(
                     ollama.chat(
                         messages=[{"role": "user", "content": prompt}],
                         temperature=0.2,
                     ),
-                    timeout=15.0,
+                    timeout=20.0,
                 )
 
                 data = self._parse_json_topics(response)
@@ -302,33 +302,9 @@ class TopicExtractor:
                     if "topics" in data and len(data["topics"]) > 0:
                         return data
             except Exception as e:
-                print(f"[TopicExtractor] Primary LLM error ({e}), trying Gemini cascade...")
+                print(f"[TopicExtractor] LLM topic extraction error ({e}), using structural fallback...")
 
-            # Attempt 2: Gemini Direct Cascade
-            if vlm_client.is_configured():
-                payload = {
-                    "contents": [{"parts": [{"text": prompt}]}],
-                    "generationConfig": {"temperature": 0.2, "responseMimeType": "application/json"}
-                }
-                for model_name in CASCADE_MODELS:
-                    url = f"{vlm_client.base_url}/models/{model_name}:generateContent?key={vlm_client.api_key}"
-                    try:
-                        async with httpx.AsyncClient(timeout=15.0) as client:
-                            resp = await client.post(url, json=payload)
-                            if resp.status_code == 200:
-                                gem_data = resp.json()
-                                raw_txt = gem_data["candidates"][0]["content"]["parts"][0]["text"]
-                                data = self._parse_json_topics(raw_txt)
-                                if data:
-                                    if data.get("is_study_material") is False:
-                                        return data
-                                    if "topics" in data and len(data["topics"]) > 0:
-                                        return data
-                    except Exception as e:
-                        print(f"[TopicExtractor] Gemini cascade error on {model_name}: {e}")
-                        continue
-
-        # Attempt 3: Intelligent Document Heading Extraction Fallback
+        # Intelligent Document Heading Extraction Fallback
         return self._heuristic_fallback(subject_clean, path.stem, text_sample)
 
     def _parse_json_topics(self, raw_text: str) -> Optional[Dict[str, Any]]:
