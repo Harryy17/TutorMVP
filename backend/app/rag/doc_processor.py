@@ -54,6 +54,7 @@ class DocumentRecord:
     file_name: str
     subject: str
     session_id: Optional[str] = None
+    user_id: Optional[str] = "default_user"
     status: str = "processing_text"  # "processing_text" | "text_ready" | "processing_enrichment" | "fully_processed" | "error"
     chunks: List[DocumentChunk] = field(default_factory=list)
     stats: Dict[str, int] = field(default_factory=lambda: {"text_chunks": 0, "tables": 0, "images": 0})
@@ -82,6 +83,7 @@ class DocumentProcessor:
         file_name: str,
         subject: str = "General",
         session_id: Optional[str] = None,
+        user_id: str = "default_user",
     ) -> DocumentRecord:
         """
         Stage 1: Multi-modal document ingestion.
@@ -95,6 +97,7 @@ class DocumentProcessor:
             file_name=file_name,
             subject=subject,
             session_id=session_id,
+            user_id=user_id,
             status="processing_text",
         )
         self._docs[doc_id] = doc
@@ -113,7 +116,7 @@ class DocumentProcessor:
                 pgvector_store.index_chunks([
                     {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                     for c in chunks
-                ], session_id=session_id, doc_id=doc_id)
+                ], session_id=session_id, doc_id=doc_id, user_id=user_id)
                 return doc
             except Exception as e:
                 doc.status = "error"
@@ -139,7 +142,7 @@ class DocumentProcessor:
                     pgvector_store.index_chunks([
                         {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                         for c in chunks
-                    ], session_id=session_id, doc_id=doc_id)
+                    ], session_id=session_id, doc_id=doc_id, user_id=user_id)
                     print(f"[DocProcessor] Successfully extracted {len(chunks)} text chunks from image with VLM.")
                 else:
                     print(f"[DocProcessor] VLM returned empty text for image {file_name}")
@@ -228,7 +231,7 @@ class DocumentProcessor:
                 pgvector_store.index_chunks([
                     {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                     for c in text_chunks
-                ], session_id=session_id, doc_id=doc_id)
+                ], session_id=session_id, doc_id=doc_id, user_id=user_id)
                 print(f"[DocProcessor] Fast path completed: {len(text_chunks)} text chunks indexed for doc {doc_id}.")
             except Exception as e:
                 print(f"[DocProcessor] Fast path text extraction error: {e}")
@@ -263,7 +266,7 @@ class DocumentProcessor:
                 pgvector_store.index_chunks([
                     {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                     for c in chunks
-                ], session_id=session_id, doc_id=doc_id)
+                ], session_id=session_id, doc_id=doc_id, user_id=user_id)
                 print(f"[DocProcessor] Word doc ingestion completed: {len(chunks)} text chunks indexed for {file_name}.")
                 return doc
             except Exception as e:
@@ -297,7 +300,7 @@ class DocumentProcessor:
                 pgvector_store.index_chunks([
                     {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                     for c in slide_chunks
-                ], session_id=session_id, doc_id=doc_id)
+                ], session_id=session_id, doc_id=doc_id, user_id=user_id)
                 print(f"[DocProcessor] PPTX ingestion completed: {len(slide_chunks)} chunks indexed for {file_name}.")
                 return doc
             except Exception as e:
@@ -308,7 +311,7 @@ class DocumentProcessor:
 
         return doc
 
-    def get_document_text(self, doc_id: str, max_chars: int = 12000) -> str:
+    def get_document_text(self, doc_id: str, max_chars: int = 12000, user_id: Optional[str] = None) -> str:
         """
         Retrieves clean assembled text of the document across all chunks
         for feeding into the LLM/Teaching Engine/Exam Engine.
@@ -322,7 +325,7 @@ class DocumentProcessor:
             return full[:max_chars]
 
         # Fallback to PostgreSQL
-        return pgvector_store.get_document_text(doc_id=doc_id, max_chars=max_chars)
+        return pgvector_store.get_document_text(doc_id=doc_id, max_chars=max_chars, user_id=user_id)
 
     # ─── STAGE 2 & 3: ASYNC BACKGROUND ENRICHMENT ─────────────────────────
     async def run_background_enrichment(self, doc_id: str):
@@ -343,6 +346,7 @@ class DocumentProcessor:
             return
 
         doc.status = "processing_enrichment"
+        user_id = getattr(doc, "user_id", "default_user")
 
         # ── Stage 2: Table Extraction ──
         try:
@@ -353,7 +357,7 @@ class DocumentProcessor:
                 pgvector_store.index_chunks([
                     {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                     for c in table_chunks
-                ], session_id=doc.session_id, doc_id=doc_id)
+                ], session_id=doc.session_id, doc_id=doc_id, user_id=user_id)
                 print(f"[DocProcessor] Stage 2 Complete: Extracted & indexed {len(table_chunks)} tables for doc {doc_id}")
         except Exception as e:
             print(f"[DocProcessor] Stage 2 Table Extraction warning: {e}")
@@ -367,7 +371,7 @@ class DocumentProcessor:
                 pgvector_store.index_chunks([
                     {"chunk_id": c.chunk_id, "doc_id": c.doc_id, "page": c.page, "source_type": c.source_type, "content": c.content}
                     for c in image_chunks
-                ], session_id=doc.session_id, doc_id=doc_id)
+                ], session_id=doc.session_id, doc_id=doc_id, user_id=user_id)
                 print(f"[DocProcessor] Stage 3 Complete: Extracted & captioned {len(image_chunks)} images for doc {doc_id}")
         except Exception as e:
             print(f"[DocProcessor] Stage 3 Image Captioning warning: {e}")
@@ -593,6 +597,7 @@ class DocumentProcessor:
         query: str,
         top_k: int = 6,
         session_id: Optional[str] = None,
+        user_id: Optional[str] = None,
     ) -> Tuple[str, str, Dict[str, Any]]:
 
         """
@@ -606,6 +611,7 @@ class DocumentProcessor:
         """
         doc = self._docs.get(doc_id)
         target_sid = session_id or doc_id or (getattr(doc, "session_id", None) if doc else None)
+        active_user_id = user_id or (getattr(doc, "user_id", None) if doc else None)
 
         query_lower = query.lower().strip()
         table_keywords = {"table", "value", "compare", "how many", "number", "data", "columns", "rows", "statistic", "percent", "metric", "versus", "vs"}
@@ -633,7 +639,7 @@ class DocumentProcessor:
 
         # 1. Target page chunks if specified
         if target_page is not None:
-            page_rows = pgvector_store.get_page_chunks(doc_id=doc_id, page=target_page, session_id=target_sid)
+            page_rows = pgvector_store.get_page_chunks(doc_id=doc_id, page=target_page, session_id=target_sid, user_id=active_user_id)
             for r in page_rows:
                 cid = r["chunk_id"]
                 candidate_map[cid] = {
@@ -646,7 +652,7 @@ class DocumentProcessor:
                 }
 
         # 2. Hybrid search (Full-Text tsvector + pgvector Cosine Similarity)
-        hybrid_matches = pgvector_store.hybrid_search(query=query, doc_id=doc_id, session_id=target_sid, top_k=top_k * 4)
+        hybrid_matches = pgvector_store.hybrid_search(query=query, doc_id=doc_id, session_id=target_sid, top_k=top_k * 4, user_id=active_user_id)
         for rank_idx, m in enumerate(hybrid_matches):
             cid = m["chunk_id"]
             if cid not in candidate_map:

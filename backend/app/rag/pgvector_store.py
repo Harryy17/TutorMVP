@@ -106,6 +106,7 @@ class PgVectorStore:
                 cur.execute("""
                     CREATE TABLE IF NOT EXISTS study_sessions (
                         session_id VARCHAR(100) PRIMARY KEY,
+                        user_id VARCHAR(100) NOT NULL DEFAULT 'default_user',
                         subject VARCHAR(255),
                         title VARCHAR(255),
                         file_name VARCHAR(255),
@@ -113,6 +114,8 @@ class PgVectorStore:
                         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                         metadata JSONB DEFAULT '{}'::jsonb
                     );
+                    ALTER TABLE study_sessions ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) NOT NULL DEFAULT 'default_user';
+                    CREATE INDEX IF NOT EXISTS idx_study_sessions_user_id ON study_sessions(user_id);
                 """)
 
                 # 3. Table: session_topics
@@ -150,6 +153,7 @@ class PgVectorStore:
                     CREATE TABLE IF NOT EXISTS document_chunks (
                         chunk_id VARCHAR(120) PRIMARY KEY,
                         session_id VARCHAR(100) REFERENCES study_sessions(session_id) ON DELETE CASCADE,
+                        user_id VARCHAR(100) NOT NULL DEFAULT 'default_user',
                         doc_id VARCHAR(100),
                         page_number INTEGER,
                         chunk_index INTEGER,
@@ -160,7 +164,9 @@ class PgVectorStore:
                         embedding vector({self.dimension}),
                         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
                     );
+                    ALTER TABLE document_chunks ADD COLUMN IF NOT EXISTS user_id VARCHAR(100) NOT NULL DEFAULT 'default_user';
                     CREATE INDEX IF NOT EXISTS idx_chunks_session ON document_chunks(session_id);
+                    CREATE INDEX IF NOT EXISTS idx_chunks_user ON document_chunks(user_id);
                     CREATE INDEX IF NOT EXISTS idx_chunks_doc ON document_chunks(doc_id);
                     CREATE INDEX IF NOT EXISTS idx_chunks_page ON document_chunks(session_id, page_number);
                 """)
@@ -202,6 +208,7 @@ class PgVectorStore:
         session_id: Optional[str] = None,
         doc_id: Optional[str] = None,
         embeddings: Optional[List[List[float]]] = None,
+        user_id: str = "default_user",
     ) -> int:
         """Stores chunks, generates tsvectors, and attaches vector embeddings in PostgreSQL."""
         if not chunks:
@@ -211,7 +218,7 @@ class PgVectorStore:
         target_doc = doc_id or chunks[0].get("doc_id") or target_sid
 
         # Ensure session exists first
-        self.ensure_session(target_sid)
+        self.ensure_session(target_sid, user_id=user_id)
 
         # Fallback in-memory tracking
         if target_sid not in self._mem_chunks:
@@ -221,6 +228,7 @@ class PgVectorStore:
             c["chunk_id"] = cid
             c["session_id"] = target_sid
             c["doc_id"] = target_doc
+            c["user_id"] = user_id
             self._mem_chunks[target_sid] = [x for x in self._mem_chunks[target_sid] if x.get("chunk_id") != cid]
             self._mem_chunks[target_sid].append(c)
 
@@ -246,6 +254,7 @@ class PgVectorStore:
                 records.append((
                     cid,
                     target_sid,
+                    user_id,
                     target_doc,
                     page,
                     idx,
@@ -257,12 +266,13 @@ class PgVectorStore:
 
             insert_query = """
                 INSERT INTO document_chunks (
-                    chunk_id, session_id, doc_id, page_number, chunk_index,
+                    chunk_id, session_id, user_id, doc_id, page_number, chunk_index,
                     source_type, content, tsv_content, metadata, embedding
                 ) VALUES (
                     %s, %s, %s, %s, %s, %s, %s, to_tsvector('english', coalesce(%s, '')), %s, %s
                 )
                 ON CONFLICT (chunk_id) DO UPDATE SET
+                    user_id = EXCLUDED.user_id,
                     content = EXCLUDED.content,
                     tsv_content = to_tsvector('english', coalesce(EXCLUDED.content, '')),
                     page_number = EXCLUDED.page_number,
@@ -275,7 +285,7 @@ class PgVectorStore:
                 # Format parameters for batch execution
                 for rec in records:
                     cur.execute(insert_query, (
-                        rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[6], rec[7], rec[8]
+                        rec[0], rec[1], rec[2], rec[3], rec[4], rec[5], rec[6], rec[7], rec[8], rec[9]
                     ))
                 conn.commit()
                 return len(records)
@@ -295,6 +305,7 @@ class PgVectorStore:
         doc_id: Optional[str] = None,
         session_id: Optional[str] = None,
         limit: int = 15,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Native PostgreSQL Full-Text Search using tsquery and ts_rank_cd."""
         target_sid = session_id or doc_id
@@ -318,6 +329,10 @@ class PgVectorStore:
             if target_sid:
                 clauses.append("(session_id = %s OR doc_id = %s)")
                 params.extend([target_sid, target_sid])
+
+            if user_id:
+                clauses.append("(user_id = %s OR user_id = 'default_user')")
+                params.append(user_id)
 
             where_sql = " AND ".join(clauses)
 
@@ -401,6 +416,7 @@ class PgVectorStore:
         session_id: Optional[str] = None,
         doc_id: Optional[str] = None,
         top_k: int = 6,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Cosine distance similarity search using pgvector `<=>` operator."""
         if not self.is_configured() or not query_vector:
@@ -419,6 +435,10 @@ class PgVectorStore:
             if target_sid:
                 clauses.append("(session_id = %s OR doc_id = %s)")
                 params.extend([target_sid, target_sid])
+
+            if user_id:
+                clauses.append("(user_id = %s OR user_id = 'default_user')")
+                params.append(user_id)
 
             where_sql = " AND ".join(clauses)
 
@@ -458,17 +478,18 @@ class PgVectorStore:
         session_id: Optional[str] = None,
         doc_id: Optional[str] = None,
         top_k: int = 8,
+        user_id: Optional[str] = None,
     ) -> List[Dict[str, Any]]:
         """Fuses Full-Text search and Vector search results using Reciprocal Rank Fusion."""
         target_sid = session_id or doc_id
 
         # 1. Full-Text Search Candidates
-        text_candidates = self.text_search(query=query, doc_id=doc_id, session_id=target_sid, limit=top_k * 2)
+        text_candidates = self.text_search(query=query, doc_id=doc_id, session_id=target_sid, limit=top_k * 2, user_id=user_id)
 
         # 2. Vector Search Candidates
         vector_candidates = []
         if query_vector:
-            vector_candidates = self.similarity_search(query_vector=query_vector, session_id=target_sid, doc_id=doc_id, top_k=top_k * 2)
+            vector_candidates = self.similarity_search(query_vector=query_vector, session_id=target_sid, doc_id=doc_id, top_k=top_k * 2, user_id=user_id)
 
         if not vector_candidates:
             return text_candidates[:top_k]
@@ -498,7 +519,7 @@ class PgVectorStore:
         return results
 
     # ─── EXACT PAGE & DOCUMENT TEXT EXTRACTION ───────────────────────────────
-    def get_page_chunks(self, doc_id: str, page: int, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
+    def get_page_chunks(self, doc_id: str, page: int, session_id: Optional[str] = None, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
         """Fetches all chunks for an exact page number."""
         target_sid = session_id or doc_id
         if not self.is_configured():
@@ -521,13 +542,20 @@ class PgVectorStore:
             if not conn:
                 return []
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
+                clauses = ["(session_id = %s OR doc_id = %s)", "page_number = %s"]
+                params: List[Any] = [target_sid, doc_id, page]
+                if user_id:
+                    clauses.append("(user_id = %s OR user_id = 'default_user')")
+                    params.append(user_id)
+                where_sql = " AND ".join(clauses)
+
+                cur.execute(f"""
                     SELECT 
                         chunk_id, session_id, doc_id, page_number AS page, source_type, content, metadata
                     FROM document_chunks
-                    WHERE (session_id = %s OR doc_id = %s) AND page_number = %s
+                    WHERE {where_sql}
                     ORDER BY chunk_index ASC;
-                """, (target_sid, doc_id, page))
+                """, params)
                 rows = cur.fetchall()
                 return [dict(r) for r in rows]
         except Exception as e:
@@ -537,7 +565,7 @@ class PgVectorStore:
             if conn:
                 conn.close()
 
-    def get_document_text(self, doc_id: str, session_id: Optional[str] = None, max_chars: int = 12000) -> str:
+    def get_document_text(self, doc_id: str, session_id: Optional[str] = None, max_chars: int = 12000, user_id: Optional[str] = None) -> str:
         """Retrieves aggregated document text across all chunks."""
         target_sid = session_id or doc_id
         if not self.is_configured():
@@ -550,12 +578,21 @@ class PgVectorStore:
             if not conn:
                 return ""
             with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT content FROM document_chunks
-                    WHERE (session_id = %s OR doc_id = %s)
-                    ORDER BY page_number ASC, chunk_index ASC
-                    LIMIT 40;
-                """, (target_sid, doc_id))
+                if user_id:
+                    cur.execute("""
+                        SELECT content FROM document_chunks
+                        WHERE (session_id = %s OR doc_id = %s)
+                          AND (user_id = %s OR user_id = 'default_user')
+                        ORDER BY page_number ASC, chunk_index ASC
+                        LIMIT 40;
+                    """, (target_sid, doc_id, user_id))
+                else:
+                    cur.execute("""
+                        SELECT content FROM document_chunks
+                        WHERE (session_id = %s OR doc_id = %s)
+                        ORDER BY page_number ASC, chunk_index ASC
+                        LIMIT 40;
+                    """, (target_sid, doc_id))
                 rows = cur.fetchall()
                 return "\n\n".join(r[0] for r in rows if r[0])[:max_chars]
         except Exception as e:
@@ -566,14 +603,14 @@ class PgVectorStore:
                 conn.close()
 
     # ─── SESSION & TOPIC & MESSAGE STATE MANAGEMENT ──────────────────────────
-    def ensure_session(self, session_id: str, subject: str = "General", title: Optional[str] = None):
+    def ensure_session(self, session_id: str, subject: str = "General", title: Optional[str] = None, user_id: str = "default_user"):
         """Ensures a session row exists in study_sessions."""
         if not session_id:
             return
         if not self.is_configured():
             if session_id not in self._mem_sessions:
                 self._mem_sessions[session_id] = {
-                    "meta": {"id": session_id, "subject": subject, "title": title or subject},
+                    "meta": {"id": session_id, "subject": subject, "title": title or subject, "user_id": user_id},
                     "topics": [],
                     "messages": [],
                 }
@@ -586,13 +623,14 @@ class PgVectorStore:
                 return
             with conn.cursor() as cur:
                 cur.execute("""
-                    INSERT INTO study_sessions (session_id, subject, title, updated_at)
-                    VALUES (%s, %s, %s, CURRENT_TIMESTAMP)
+                    INSERT INTO study_sessions (session_id, user_id, subject, title, updated_at)
+                    VALUES (%s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (session_id) DO UPDATE SET
+                        user_id = COALESCE(EXCLUDED.user_id, study_sessions.user_id),
                         subject = COALESCE(EXCLUDED.subject, study_sessions.subject),
                         title = COALESCE(EXCLUDED.title, study_sessions.title),
                         updated_at = CURRENT_TIMESTAMP;
-                """, (session_id, subject, title or subject))
+                """, (session_id, user_id, subject, title or subject))
                 conn.commit()
         except Exception as e:
             if conn:
@@ -611,6 +649,7 @@ class PgVectorStore:
         messages: Optional[List[Dict[str, Any]]] = None,
         file_name: Optional[str] = None,
         metadata: Optional[Dict[str, Any]] = None,
+        user_id: Optional[str] = None,
     ):
         """Saves complete session state (metadata, topics, messages) to PostgreSQL."""
         if not session_id:
@@ -626,6 +665,8 @@ class PgVectorStore:
             mem["meta"]["title"] = title
         if file_name:
             mem["meta"]["file_name"] = file_name
+        if user_id:
+            mem["meta"]["user_id"] = user_id
         if topics is not None:
             mem["topics"] = topics
         if messages is not None:
@@ -643,21 +684,16 @@ class PgVectorStore:
             with conn.cursor() as cur:
                 # 1. Upsert study_sessions
                 cur.execute("""
-                    INSERT INTO study_sessions (session_id, subject, title, file_name, metadata, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, CURRENT_TIMESTAMP)
+                    INSERT INTO study_sessions (session_id, user_id, subject, title, file_name, metadata, updated_at)
+                    VALUES (%s, COALESCE(%s, 'default_user'), %s, %s, %s, %s, CURRENT_TIMESTAMP)
                     ON CONFLICT (session_id) DO UPDATE SET
+                        user_id = COALESCE(EXCLUDED.user_id, study_sessions.user_id),
                         subject = COALESCE(EXCLUDED.subject, study_sessions.subject),
                         title = COALESCE(EXCLUDED.title, study_sessions.title),
                         file_name = COALESCE(EXCLUDED.file_name, study_sessions.file_name),
                         metadata = COALESCE(EXCLUDED.metadata, study_sessions.metadata),
                         updated_at = CURRENT_TIMESTAMP;
-                """, (
-                    session_id,
-                    subject or "General",
-                    title or "Study Session",
-                    file_name,
-                    json.dumps(metadata or {}),
-                ))
+                """, (session_id, user_id, subject, title or subject, file_name, json.dumps(metadata or {})))
 
                 # 2. Upsert topics
                 if topics:
@@ -713,7 +749,7 @@ class PgVectorStore:
             if conn:
                 conn.close()
 
-    def get_session_state(self, session_id: str) -> Optional[Dict[str, Any]]:
+    def get_session_state(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Retrieves session metadata, topics, and messages from PostgreSQL."""
         if not self.is_configured():
             return self._mem_sessions.get(session_id)
@@ -726,10 +762,16 @@ class PgVectorStore:
 
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # 1. Fetch study_sessions
-                cur.execute("""
-                    SELECT session_id, subject, title, file_name, created_at, updated_at, metadata
-                    FROM study_sessions WHERE session_id = %s;
-                """, (session_id,))
+                if user_id:
+                    cur.execute("""
+                        SELECT session_id, user_id, subject, title, file_name, created_at, updated_at, metadata
+                        FROM study_sessions WHERE session_id = %s AND (user_id = %s OR user_id = 'default_user');
+                    """, (session_id, user_id))
+                else:
+                    cur.execute("""
+                        SELECT session_id, user_id, subject, title, file_name, created_at, updated_at, metadata
+                        FROM study_sessions WHERE session_id = %s;
+                    """, (session_id,))
                 sess_row = cur.fetchone()
                 if not sess_row:
                     return self._mem_sessions.get(session_id)
@@ -779,6 +821,7 @@ class PgVectorStore:
                 return {
                     "meta": {
                         "id": sess_row["session_id"],
+                        "user_id": sess_row.get("user_id"),
                         "subject": sess_row["subject"],
                         "title": sess_row["title"],
                         "file_name": sess_row["file_name"],
@@ -793,9 +836,11 @@ class PgVectorStore:
             if conn:
                 conn.close()
 
-    def get_all_sessions(self) -> List[Dict[str, Any]]:
-        """Lists all study sessions stored in PostgreSQL."""
+    def get_all_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        """Lists all study sessions stored in PostgreSQL, partitioned by user_id."""
         if not self.is_configured():
+            if user_id:
+                return [v.get("meta", {}) for v in self._mem_sessions.values() if v.get("meta", {}).get("user_id") in [user_id, "default_user"]]
             return [v.get("meta", {}) for v in self._mem_sessions.values()]
 
         conn = None
@@ -804,11 +849,19 @@ class PgVectorStore:
             if not conn:
                 return []
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
-                cur.execute("""
-                    SELECT session_id AS id, subject, title, file_name, created_at, updated_at
-                    FROM study_sessions
-                    ORDER BY updated_at DESC;
-                """)
+                if user_id:
+                    cur.execute("""
+                        SELECT session_id AS id, user_id, subject, title, file_name, created_at, updated_at
+                        FROM study_sessions
+                        WHERE user_id = %s OR user_id = 'default_user'
+                        ORDER BY updated_at DESC;
+                    """, (user_id,))
+                else:
+                    cur.execute("""
+                        SELECT session_id AS id, user_id, subject, title, file_name, created_at, updated_at
+                        FROM study_sessions
+                        ORDER BY updated_at DESC;
+                    """)
                 rows = cur.fetchall()
                 return [dict(r) for r in rows]
         except Exception as e:
@@ -818,7 +871,7 @@ class PgVectorStore:
             if conn:
                 conn.close()
 
-    def clear_session(self, session_id: str) -> bool:
+    def clear_session(self, session_id: str, user_id: Optional[str] = None) -> bool:
         """Cascades deletion of a session and its topics, messages, and chunks."""
         self._mem_sessions.pop(session_id, None)
         self._mem_chunks.pop(session_id, None)
@@ -832,7 +885,10 @@ class PgVectorStore:
             if not conn:
                 return False
             with conn.cursor() as cur:
-                cur.execute("DELETE FROM study_sessions WHERE session_id = %s;", (session_id,))
+                if user_id:
+                    cur.execute("DELETE FROM study_sessions WHERE session_id = %s AND (user_id = %s OR user_id = 'default_user');", (session_id, user_id))
+                else:
+                    cur.execute("DELETE FROM study_sessions WHERE session_id = %s;", (session_id,))
                 conn.commit()
                 return True
         except Exception as e:

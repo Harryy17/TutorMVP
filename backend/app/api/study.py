@@ -15,7 +15,8 @@ import asyncio
 import urllib.parse
 from pathlib import Path
 from typing import Optional, List, Dict, Any, Tuple
-from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query
+import jwt
+from fastapi import APIRouter, HTTPException, UploadFile, File, Form, Query, Header
 from fastapi.responses import StreamingResponse, FileResponse
 from pydantic import BaseModel
 
@@ -36,6 +37,25 @@ router = APIRouter(prefix="/study", tags=["study"])
 
 # In-memory session store for fast active study flows
 _study_sessions: Dict[str, Dict[str, Any]] = {}
+
+
+def get_auth_user_id(
+    authorization: Optional[str] = None,
+    x_user_id: Optional[str] = None,
+) -> str:
+    """Extract authenticated user_id from X-User-Id header or Supabase JWT Bearer token."""
+    if x_user_id and x_user_id.strip():
+        return x_user_id.strip()
+    if authorization and authorization.startswith("Bearer "):
+        token = authorization.split("Bearer ", 1)[1].strip()
+        try:
+            payload = jwt.decode(token, options={"verify_signature": False})
+            sub = payload.get("sub") or payload.get("user_id")
+            if sub:
+                return str(sub)
+        except Exception:
+            pass
+    return "default_user"
 
 
 class SessionCreateRequest(BaseModel):
@@ -106,42 +126,68 @@ class EvaluateRequest(BaseModel):
 
 # ─── Sessions Workspace Endpoints ───────────────────────────────────────────────
 @router.get("/sessions")
-async def list_study_sessions():
-    """List all study sessions with metadata."""
-    return session_manager.list_sessions()
+async def list_study_sessions(
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
+    """List all study sessions isolated by user_id."""
+    uid = get_auth_user_id(authorization, x_user_id)
+    return session_manager.list_sessions(user_id=uid)
 
 
 @router.post("/sessions/new")
-async def create_new_session(body: Optional[SessionCreateRequest] = None):
-    """Create a fresh study session and initialize its physical SQLite DB."""
+async def create_new_session(
+    body: Optional[SessionCreateRequest] = None,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
+    """Create a fresh study session bound to the user."""
+    uid = get_auth_user_id(authorization, x_user_id)
     sub = body.subject if body else "General"
     title = body.title if body else None
-    return session_manager.create_session(subject=sub, title=title)
+    return session_manager.create_session(subject=sub, title=title, user_id=uid)
 
 
 @router.get("/sessions/{session_id}")
-async def get_study_session(session_id: str):
-    """Load session state, topics, and conversation messages."""
-    return session_manager.load_session_state(session_id)
+async def get_study_session(
+    session_id: str,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
+    """Load session state, topics, and conversation messages for the user."""
+    uid = get_auth_user_id(authorization, x_user_id)
+    return session_manager.load_session_state(session_id, user_id=uid)
 
 
 @router.post("/sessions/{session_id}/state")
-async def save_study_session_state(session_id: str, body: SessionStatePayload):
+async def save_study_session_state(
+    session_id: str,
+    body: SessionStatePayload,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
     """Persist messages, topics, and subject for a session."""
+    uid = get_auth_user_id(authorization, x_user_id)
     session_manager.save_session_state(
         session_id=session_id,
         messages=body.messages,
         topics=body.topics,
         subject=body.subject,
         title=body.title,
+        user_id=uid,
     )
     return {"success": True}
 
 
 @router.delete("/sessions/{session_id}")
-async def delete_study_session(session_id: str):
-    """Delete a study session and remove its isolated SQLite database."""
-    session_manager.delete_session(session_id)
+async def delete_study_session(
+    session_id: str,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
+    """Delete a study session owned by the user."""
+    uid = get_auth_user_id(authorization, x_user_id)
+    session_manager.delete_session(session_id, user_id=uid)
     if session_id in _study_sessions:
         del _study_sessions[session_id]
     return {"success": True}
@@ -149,15 +195,26 @@ async def delete_study_session(session_id: str):
 
 # ─── 0. Intelligent Decision Agent ───────────────────────────────────────────────
 @router.post("/agent/message")
-async def chat_with_decision_agent(body: AgentMessageRequest):
+async def chat_with_decision_agent(
+    body: AgentMessageRequest,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
     """
     Intelligent Agent endpoint that analyzes query intent with LLM, extracts clean
-    concept targets, retrieves precise chunks from SQLite FTS5 store, and synthesizes answers.
+    concept targets, retrieves precise chunks from PGVector / FTS5 store, and synthesizes answers.
     """
     context = ""
     file_name = None
     doc_status_note = ""
-    user_id = body.user_id or "default_user"
+    uid = x_user_id or body.user_id
+    if not uid or uid == "default_user":
+        extracted = get_auth_user_id(authorization, x_user_id)
+        if extracted != "default_user":
+            uid = extracted
+        else:
+            uid = body.user_id or "default_user"
+    user_id = uid
 
     if body.session_id:
         if body.session_id in _study_sessions:
@@ -166,7 +223,7 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
             if not body.current_subject:
                 body.current_subject = session.get("subject")
         else:
-            saved_state = session_manager.get_session_state(body.session_id)
+            saved_state = session_manager.get_session_state(body.session_id, user_id=user_id)
             if saved_state and saved_state.get("meta"):
                 file_name = saved_state["meta"].get("file_name")
                 if not body.current_subject:
@@ -177,6 +234,7 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
                     "file_name": file_name,
                     "title": saved_state["meta"].get("title"),
                     "topics": saved_state.get("topics", []),
+                    "user_id": user_id,
                 }
 
     # 1. Run LLM Query Analyzer Agent to classify intent & target concept
@@ -197,6 +255,7 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
             query=combined_query,
             top_k=6,
             session_id=body.session_id,
+            user_id=user_id,
         )
 
     # 3. If query asks for topics, curriculum, or overview, inject session topics into context
@@ -204,7 +263,7 @@ async def chat_with_decision_agent(body: AgentMessageRequest):
     if body.session_id and body.session_id in _study_sessions:
         session_topics = _study_sessions[body.session_id].get("topics", [])
     elif body.session_id:
-        saved_state = session_manager.get_session_state(body.session_id)
+        saved_state = session_manager.get_session_state(body.session_id, user_id=user_id)
         if saved_state:
             session_topics = saved_state.get("topics", [])
 
@@ -289,16 +348,27 @@ async def upload_study_material(
     file: UploadFile = File(...),
     subject: str = Form("General Subject"),
     session_id: Optional[str] = Form(None),
+    user_id: Optional[str] = Form(None),
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
 ):
     """
     Accepts study materials:
-    - [Stage 0]: Save file & create/bind to session_id
+    - [Stage 0]: Save file & create/bind to session_id with user_id partitioning
     - [Stage 1]: Fast-path text extraction and chunking (blocking, sub-seconds)
     - [Stage 2 & 3]: Background enrichment for tables & image captions (non-blocking)
     - Topic extraction in <5 seconds
     """
+    uid = user_id or x_user_id
+    if not uid or uid == "default_user":
+        extracted = get_auth_user_id(authorization, x_user_id)
+        if extracted != "default_user":
+            uid = extracted
+        else:
+            uid = "default_user"
+
     study_id = session_id if (session_id and session_id.strip()) else f"session_{uuid.uuid4().hex[:10]}"
-    session_manager.init_session_database(study_id)
+    session_manager.init_session_database(study_id, user_id=uid)
 
     upload_dir = Path(settings.UPLOAD_DIR) / study_id
     upload_dir.mkdir(parents=True, exist_ok=True)
@@ -319,7 +389,7 @@ async def upload_study_material(
                 topic_extractor.extract_topics(
                     file_path=file_path,
                     subject=subject,
-                    user_id="default_user",
+                    user_id=uid,
                 ),
                 timeout=22.0,
             )
@@ -337,6 +407,7 @@ async def upload_study_material(
             file_name=file.filename,
             subject=subject,
             session_id=study_id,
+            user_id=uid,
         ),
         _safe_extract_topics(),
     )
@@ -382,6 +453,7 @@ async def upload_study_material(
         "file_path": file_path,
         "topics": topics,
         "title": session_title,
+        "user_id": uid,
         "is_study_material": is_study_material,
         "detected_document_type": detected_document_type,
         "validation_reason": validation_reason,
@@ -389,12 +461,13 @@ async def upload_study_material(
     }
     _study_sessions[study_id] = session_payload
 
-    # Persist topics into physical SQLite session DB and update registry
+    # Persist topics into physical PostgreSQL / session DB and update registry
     session_manager.save_session_state(
         session_id=study_id,
         topics=topics,
         subject=clean_subject,
         title=session_title,
+        user_id=uid,
     )
 
     return {
@@ -416,9 +489,16 @@ async def upload_study_material(
 
 # ─── 2. Get Topics for Session ──────────────────────────────────────────────────
 @router.get("/session/{study_id}")
-async def get_study_session(study_id: str):
+async def get_active_study_session(
+    study_id: str,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
     """Retrieve details and topics for an active study session."""
+    uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(study_id)
+    if not session:
+        session = session_manager.get_session_state(study_id, user_id=uid)
     if not session:
         raise HTTPException(status_code=404, detail="Study session not found")
     return session
@@ -426,10 +506,15 @@ async def get_study_session(study_id: str):
 
 # ─── 3. Normal Mode: Core Idea ──────────────────────────────────────────────────
 @router.post("/topic/core-idea")
-async def get_topic_core_idea(body: CoreIdeaRequest):
+async def get_topic_core_idea(
+    body: CoreIdeaRequest,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
     """Print the core idea of a topic for Normal Mode."""
+    uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(body.session_id, {})
-    context = doc_processor.get_document_text(body.session_id, max_chars=5000)
+    context = doc_processor.get_document_text(body.session_id, max_chars=5000, user_id=uid)
     if not context and session.get("file_path"):
         ext = Path(session["file_path"]).suffix.lower()
         if ext in {".txt", ".md", ".py", ".csv", ".json"}:
@@ -454,12 +539,19 @@ async def get_topic_core_idea(body: CoreIdeaRequest):
 
 # ─── 4. Normal Mode: Interactive Doubt Resolution ──────────────────────────────
 @router.post("/topic/doubt")
-async def resolve_topic_doubt(body: DoubtRequest):
+async def resolve_topic_doubt(
+    body: DoubtRequest,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
     """Resolve student doubts with source-tagged grounded chat."""
+    uid = body.user_id or get_auth_user_id(authorization, x_user_id)
     context, _, _ = doc_processor.retrieve_context(
         doc_id=body.session_id,
         query=f"{body.topic_title} {body.question}",
         top_k=5,
+        session_id=body.session_id,
+        user_id=uid,
     )
 
     answer = await teaching_engine.answer_doubt(
@@ -468,7 +560,6 @@ async def resolve_topic_doubt(body: DoubtRequest):
         context=context,
         history=body.history or [],
     )
-
 
     return {
         "topic_id": body.topic_id,
@@ -483,13 +574,16 @@ async def stream_teacher_mode(
     session_id: str = Query(...),
     topic_id: str = Query(...),
     topic_title: str = Query(...),
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
 ):
     """
     SSE stream for Teacher Mode lesson delivery:
     Intro -> Simple Explanation -> Deep Breakdown -> Wrap-up
     """
+    uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(session_id, {})
-    context = doc_processor.get_document_text(session_id, max_chars=8000)
+    context = doc_processor.get_document_text(session_id, max_chars=8000, user_id=uid)
     if not context and session.get("file_path"):
         ext = Path(session["file_path"]).suffix.lower()
         if ext in {".txt", ".md", ".py", ".csv", ".json"}:
@@ -523,12 +617,17 @@ async def stream_teacher_mode(
 
 # ─── 6. Teacher Mode: Comprehensive Mixed Examination ─────────────────────────
 @router.post("/topic/exam")
-async def generate_topic_exam(body: ExamRequest):
+async def generate_topic_exam(
+    body: ExamRequest,
+    authorization: Optional[str] = Header(None),
+    x_user_id: Optional[str] = Header(None),
+):
     """
     Generates a mixed exam with Written questions, MCQs, and Fill-in-the-blanks.
     """
+    uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(body.session_id, {})
-    context = doc_processor.get_document_text(body.session_id, max_chars=6000)
+    context = doc_processor.get_document_text(body.session_id, max_chars=6000, user_id=uid)
     if not context and session.get("file_path"):
         ext = Path(session["file_path"]).suffix.lower()
         if ext in {".txt", ".md", ".py", ".csv", ".json"}:

@@ -20,20 +20,15 @@ interface AuthState {
 export const useAuthStore = create<AuthState>()(
   persist(
     (set) => ({
-      user: {
-        id: "demo-user",
-        username: "Demo User",
-        email: "demo@deeptutor.ai",
-        role: "student"
-      },
-      token: "demo-token",
-      isAuthenticated: true,
+      user: null,
+      token: null,
+      isAuthenticated: false,
       login: (user, token) =>
         set({ user, token, isAuthenticated: true }),
       logout: () => {
-        // Also wipe the chat store persisted data so the next user
-        // doesn't see a previous user's sessions on first render
+        // Wipe stored chat/study state so the next user has a pristine workspace
         try { localStorage.removeItem('deep-tutor-chat') } catch {}
+        try { localStorage.removeItem('tutormvp_study_state') } catch {}
         set({ user: null, token: null, isAuthenticated: false })
       },
       updateUser: (user) => set({ user }),

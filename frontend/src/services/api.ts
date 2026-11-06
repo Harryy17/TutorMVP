@@ -15,6 +15,26 @@ const api = axios.create({
   headers: { 'Content-Type': 'application/json' },
 })
 
+// Attach multi-tenant user isolation headers to all outbound requests
+api.interceptors.request.use((config) => {
+  try {
+    const authStorage = localStorage.getItem('deep-tutor-auth')
+    if (authStorage) {
+      const parsed = JSON.parse(authStorage)
+      const state = parsed.state
+      if (state?.token) {
+        config.headers.Authorization = `Bearer ${state.token}`
+      }
+      if (state?.user?.id) {
+        config.headers['X-User-Id'] = state.user.id
+      }
+    }
+  } catch (err) {
+    console.warn('[API Interceptor] Could not attach auth headers:', err)
+  }
+  return config
+})
+
 // ─── Health ───────────────────────────────────────────────────
 export const healthApi = {
   check: () => api.get('/health'),
@@ -55,7 +75,21 @@ export const studyApi = {
     user_name?: string
     difficulty?: 'standard' | 'easier'
     history?: { role: string; content: string }[]
-  }) => api.post('/study/agent/message', data),
+  }) => {
+    let uid = data.user_id
+    if (!uid) {
+      try {
+        const authStorage = localStorage.getItem('deep-tutor-auth')
+        if (authStorage) {
+          const parsed = JSON.parse(authStorage)
+          if (parsed.state?.user?.id) {
+            uid = parsed.state.user.id
+          }
+        }
+      } catch {}
+    }
+    return api.post('/study/agent/message', { ...data, user_id: uid || 'default_user' })
+  },
   sendFeedback: (data: {
     user_id?: string
     action: 'confirm_good' | 'make_easier'
@@ -67,6 +101,15 @@ export const studyApi = {
     form.append('file', file)
     form.append('subject', subject)
     if (sessionId) form.append('session_id', sessionId)
+    try {
+      const authStorage = localStorage.getItem('deep-tutor-auth')
+      if (authStorage) {
+        const parsed = JSON.parse(authStorage)
+        if (parsed.state?.user?.id) {
+          form.append('user_id', parsed.state.user.id)
+        }
+      }
+    } catch {}
     return api.post('/study/upload', form, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
