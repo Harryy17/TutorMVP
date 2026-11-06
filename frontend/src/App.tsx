@@ -1,6 +1,7 @@
 import React from 'react'
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
+import TutorMvpLanding from './pages/TutorMvpLanding'
 import StudyPage from './pages/StudyPage'
 
 const queryClient = new QueryClient({
@@ -14,9 +15,12 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <Routes>
-          {/* Direct Single-Page Study Room Route */}
-          <Route path="/" element={<StudyPage />} />
+          {/* Main Luxury Hero & Landing Page */}
+          <Route path="/" element={<TutorMvpLanding />} />
+
+          {/* Interactive AI Study Room Studio */}
           <Route path="/study" element={<StudyPage />} />
+
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </BrowserRouter>
