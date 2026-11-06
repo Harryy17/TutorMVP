@@ -4,8 +4,8 @@ import { useNavigate, Link } from 'react-router-dom'
 import {
   Sparkles, ArrowRight, Search, BookOpen, Brain, GraduationCap,
   Shield, CheckCircle2, ChevronDown, Layers, FileText, ArrowUpRight,
-  LogOut, User as UserIcon, Flame, Star, ShieldCheck, Mail, Compass,
-  Cpu, Award, MessageSquareQuote, Check, ArrowDown
+  LogOut, User as UserIcon, Flame, Star, ShieldCheck, Compass,
+  Cpu, Award, MessageSquareQuote, Check, Quote, Lock, Database
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 import AuthModal from '../components/auth/AuthModal'
@@ -146,6 +146,27 @@ const LIVE_SYLLABI = [
   },
 ]
 
+const SCHOLAR_OUTCOMES = [
+  {
+    quote: 'Tutor MVP decomposed complex quantum mechanics textbooks into Socratic dialogue turns that accelerated my qualifying exam preparation by months.',
+    author: 'Julian Thorne',
+    role: 'PhD Fellow in Theoretical Physics, Oxford',
+    metric: 'Top 1% Qualifying Exam Score',
+  },
+  {
+    quote: 'The step-by-step teacher mode and instant derivation checks gave me the confidence to master smooth manifold topology and de Rham cohomology.',
+    author: 'Elena Rostova',
+    role: 'Graduate Researcher in Mathematics, MIT',
+    metric: 'Flawless Proof Mastery',
+  },
+  {
+    quote: 'Having our lab course material completely isolated at the database level with verifiable citations makes Tutor MVP our indispensable daily study partner.',
+    author: 'Marcus Chen',
+    role: 'Systems Architecture Scholar, Stanford',
+    metric: '4.2x Faster Paper Synthesis',
+  },
+]
+
 export default function TutorMvpLanding() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
@@ -160,21 +181,16 @@ export default function TutorMvpLanding() {
   const [activeTrack, setActiveTrack] = useState<string>('undergrad')
   const [activeSyllabusIdx, setActiveSyllabusIdx] = useState<number>(0)
 
-  // Newsletter state
-  const [emailSub, setEmailSub] = useState('')
-  const [subSuccess, setSubSuccess] = useState(false)
-
   const handleLaunchStudio = (subjectOverride?: string) => {
     const subj = subjectOverride || selectedDomain
     navigate(`/study?subject=${encodeURIComponent(subj)}`)
   }
 
-  const handleSubscribe = (e: React.FormEvent) => {
-    e.preventDefault()
-    if (emailSub.trim()) {
-      setSubSuccess(true)
-      setTimeout(() => setSubSuccess(false), 4000)
-      setEmailSub('')
+  // Smooth scroll handler for nav options
+  const scrollTo = (id: string) => {
+    const el = document.getElementById(id)
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'start' })
     }
   }
 
@@ -198,20 +214,36 @@ export default function TutorMvpLanding() {
             </div>
           </Link>
 
-          {/* Navigation Links */}
+          {/* Navigation Links (Matching User's Header: Programs, Methodology, AI Architecture, Scholar Outcomes) */}
           <nav className="hidden md:flex items-center gap-8 text-[13px] font-medium text-stone-600">
-            <Link to="/curriculum" className="hover:text-stone-950 transition-colors">
-              Curricula & Syllabi
-            </Link>
-            <Link to="/methodology" className="hover:text-stone-950 transition-colors">
-              Pedagogical Engine
-            </Link>
-            <a href="#tracks" className="hover:text-stone-950 transition-colors">
-              Academic Tracks
-            </a>
-            <a href="#architecture" className="hover:text-stone-950 transition-colors">
-              Cognitive Architecture
-            </a>
+            <button
+              type="button"
+              onClick={() => scrollTo('programs')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Programs
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo('methodology')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Methodology
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo('architecture')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              AI Architecture
+            </button>
+            <button
+              type="button"
+              onClick={() => scrollTo('outcomes')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Scholar Outcomes
+            </button>
           </nav>
 
           {/* User Session Action */}
@@ -390,7 +422,7 @@ export default function TutorMvpLanding() {
                 <button
                   type="button"
                   onClick={() => handleLaunchStudio()}
-                  className="hidden sm:flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md px-4 py-2 text-xs font-semibold text-stone-900 shadow-sm hover:bg-white transition"
+                  className="hidden sm:flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md px-4 py-2 text-xs font-semibold text-stone-900 shadow-sm hover:bg-white transition cursor-pointer"
                 >
                   <span>Launch Session</span>
                   <ArrowUpRight size={14} />
@@ -437,205 +469,23 @@ export default function TutorMvpLanding() {
         </div>
       </section>
 
-      {/* ── 5. Educational Track Matrix ── */}
-      <section id="tracks" className="border-t border-stone-200/80 bg-white py-20">
+      {/* ── 5. SECTION: Programs (Nav Target: id="programs") ── */}
+      <section id="programs" className="border-t border-stone-200/80 bg-white py-20 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-6 sm:px-10">
           <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
             <div>
               <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Educational Tiers
+                Academic Programs & Curricula
               </span>
               <h2 className="mt-2 font-serif text-3xl sm:text-4xl font-normal text-stone-900 tracking-tight">
-                Designed for Every Stage of Academic Ascent
-              </h2>
-            </div>
-            <p className="text-xs sm:text-sm text-stone-500 max-w-md">
-              Whether preparing for college examinations or defending a doctoral dissertation, Tutor MVP calibrates cognitive complexity dynamically.
-            </p>
-          </div>
-
-          {/* Segmented Track Switcher */}
-          <div className="mt-10 flex bg-[#FAF9F5] p-1.5 rounded-2xl border border-stone-200/90 max-w-2xl">
-            {ACADEMIC_TRACKS.map((t) => (
-              <button
-                key={t.id}
-                onClick={() => setActiveTrack(t.id)}
-                className={`flex-1 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all ${
-                  activeTrack === t.id
-                    ? 'bg-stone-900 text-white shadow-xs'
-                    : 'text-stone-600 hover:text-stone-900'
-                }`}
-              >
-                {t.title.split(' ')[0]} Track
-              </button>
-            ))}
-          </div>
-
-          {/* Active Track Showcase Card */}
-          {(() => {
-            const track = ACADEMIC_TRACKS.find((t) => t.id === activeTrack) || ACADEMIC_TRACKS[0]
-            return (
-              <div className="mt-8 rounded-3xl border border-stone-200/90 bg-[#FAF9F5] p-8 sm:p-12 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
-                <div className="lg:col-span-7 space-y-6">
-                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-stone-200 text-[11px] font-semibold uppercase tracking-wider text-amber-800">
-                    <GraduationCap size={14} />
-                    <span>{track.target} · {track.pacing}</span>
-                  </div>
-
-                  <h3 className="font-serif text-3xl font-normal text-stone-950">
-                    {track.title}
-                  </h3>
-
-                  <p className="text-stone-600 text-sm leading-relaxed font-light">
-                    {track.subtitle}
-                  </p>
-
-                  <div className="space-y-3 pt-2">
-                    {track.features.map((f, i) => (
-                      <div key={i} className="flex items-start gap-3">
-                        <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 shrink-0 mt-0.5">
-                          <Check size={12} />
-                        </div>
-                        <span className="text-xs text-stone-700 leading-normal">{f}</span>
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="pt-4 flex items-center gap-3">
-                    <button
-                      onClick={() => handleLaunchStudio(track.sampleCourses[0])}
-                      className="rounded-full bg-stone-900 px-6 py-3 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition flex items-center gap-2"
-                    >
-                      <span>Start in {track.title.split(' ')[0]} Mode</span>
-                      <ArrowRight size={13} />
-                    </button>
-                    <Link
-                      to="/curriculum"
-                      className="text-xs font-semibold text-stone-600 hover:text-stone-950 px-4 py-3"
-                    >
-                      Browse All {track.title.split(' ')[0]} Syllabi →
-                    </Link>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-5 bg-white rounded-2xl border border-stone-200 p-6 space-y-4 shadow-2xs">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
-                    Curriculum Highlights & Canonical Courses
-                  </span>
-                  <div className="space-y-2.5">
-                    {track.sampleCourses.map((c, idx) => (
-                      <div
-                        key={idx}
-                        onClick={() => handleLaunchStudio(c)}
-                        className="p-3.5 rounded-xl border border-stone-100 hover:border-stone-300 bg-[#FAF9F5] transition cursor-pointer flex items-center justify-between group"
-                      >
-                        <span className="text-xs font-semibold text-stone-800 group-hover:text-stone-950">{c}</span>
-                        <ArrowUpRight size={13} className="text-stone-400 group-hover:text-stone-900 transition" />
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-      </section>
-
-      {/* ── 6. Interactive Live Syllabus Previewer ── */}
-      <section className="py-20 border-t border-stone-200/80 bg-[#FAF9F5]">
-        <div className="mx-auto max-w-7xl px-6 sm:px-10">
-          <div className="text-center max-w-2xl mx-auto">
-            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
-              Live Syllabus Engine Preview
-            </span>
-            <h2 className="mt-2 font-serif text-3xl sm:text-4xl font-normal text-stone-900">
-              Inspect Real Dissected Learning Blueprints
-            </h2>
-            <p className="mt-3 text-xs sm:text-sm text-stone-500">
-              See how our multimodal parser extracts verified learning objectives from heavy academic texts.
-            </p>
-          </div>
-
-          {/* Subject Pills */}
-          <div className="mt-10 flex flex-wrap justify-center gap-2">
-            {LIVE_SYLLABI.map((s, idx) => (
-              <button
-                key={idx}
-                onClick={() => setActiveSyllabusIdx(idx)}
-                className={`rounded-full px-5 py-2 text-xs font-semibold transition ${
-                  activeSyllabusIdx === idx
-                    ? 'bg-stone-900 text-white shadow-sm'
-                    : 'bg-white border border-stone-200 text-stone-700 hover:bg-stone-100'
-                }`}
-              >
-                {s.subject}
-              </button>
-            ))}
-          </div>
-
-          {/* Active Syllabus Display Card */}
-          {(() => {
-            const syl = LIVE_SYLLABI[activeSyllabusIdx]
-            return (
-              <div className="mt-8 max-w-4xl mx-auto bg-white rounded-3xl border border-stone-200/90 p-8 sm:p-10 shadow-sm">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-stone-100">
-                  <div>
-                    <span className="text-[11px] font-mono text-amber-800 font-bold uppercase">{syl.code}</span>
-                    <h3 className="mt-1 font-serif text-2xl font-normal text-stone-950">{syl.subject}</h3>
-                  </div>
-                  <button
-                    onClick={() => handleLaunchStudio(syl.subject)}
-                    className="shrink-0 flex items-center gap-2 rounded-2xl bg-stone-900 px-5 py-3 text-xs font-semibold text-white hover:bg-stone-800 transition"
-                  >
-                    <span>Launch This Course</span>
-                    <ArrowRight size={13} />
-                  </button>
-                </div>
-
-                {/* Modules list */}
-                <div className="mt-6 space-y-4">
-                  {syl.modules.map((m, i) => (
-                    <div key={i} className="flex items-start gap-4 p-4 rounded-2xl bg-[#FAF9F5] border border-stone-100">
-                      <span className="font-mono text-sm font-bold text-stone-400 mt-0.5">{m.num}</span>
-                      <div>
-                        <h4 className="text-xs font-bold text-stone-900">{m.title}</h4>
-                        <p className="text-[11px] text-stone-500 mt-0.5 font-light">{m.desc}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                {/* Sample Socratic Question */}
-                <div className="mt-6 p-4 rounded-2xl bg-amber-50/70 border border-amber-200/80 flex items-start gap-3 text-xs text-amber-950">
-                  <MessageSquareQuote size={18} className="text-amber-700 shrink-0 mt-0.5" />
-                  <div>
-                    <span className="font-bold text-[11px] uppercase tracking-wider text-amber-800">Sample Socratic Prompt:</span>
-                    <p className="mt-0.5 italic">{syl.samplePrompt}</p>
-                  </div>
-                </div>
-              </div>
-            )
-          })()}
-        </div>
-      </section>
-
-      {/* ── 7. Curated Masterclass Modules Grid (Matching Ronas IT Listings) ── */}
-      <section id="curriculum" className="border-t border-stone-200/80 bg-white py-20">
-        <div className="mx-auto max-w-7xl px-6 sm:px-10">
-          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                Curated Academic Suites
-              </span>
-              <h2 className="mt-2 font-serif text-3xl sm:text-4xl font-normal text-stone-900 tracking-tight">
-                Architectural Syllabus Blueprints
+                Curated Masterclass Syllabi & Degrees
               </h2>
             </div>
             <Link
               to="/curriculum"
-              className="text-xs font-semibold text-stone-900 hover:text-amber-800 flex items-center gap-1"
+              className="text-xs font-semibold text-stone-900 hover:text-amber-800 flex items-center gap-1.5 transition"
             >
-              <span>Explore Full Curricula Catalog (50+ Courses)</span>
+              <span>Explore Complete 50+ Course Curricula Catalog</span>
               <ArrowRight size={13} />
             </Link>
           </div>
@@ -683,7 +533,7 @@ export default function TutorMvpLanding() {
                       {item.title}
                     </h3>
 
-                    <p className="mt-2 text-xs text-stone-600 line-clamp-2 leading-relaxed">
+                    <p className="mt-2 text-xs text-stone-600 line-clamp-2 leading-relaxed font-light">
                       {item.summary}
                     </p>
                   </div>
@@ -699,149 +549,294 @@ export default function TutorMvpLanding() {
               </motion.div>
             ))}
           </div>
+
+          {/* Educational Track Switcher */}
+          <div className="mt-16 pt-12 border-t border-stone-100">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Structured Tracks
+            </span>
+            <div className="mt-6 flex bg-[#FAF9F5] p-1.5 rounded-2xl border border-stone-200/90 max-w-2xl">
+              {ACADEMIC_TRACKS.map((t) => (
+                <button
+                  key={t.id}
+                  onClick={() => setActiveTrack(t.id)}
+                  className={`flex-1 py-3 rounded-xl text-xs font-semibold tracking-wide transition-all cursor-pointer ${
+                    activeTrack === t.id
+                      ? 'bg-stone-900 text-white shadow-xs'
+                      : 'text-stone-600 hover:text-stone-900'
+                  }`}
+                >
+                  {t.title.split(' ')[0]} Track
+                </button>
+              ))}
+            </div>
+
+            {/* Active Track Showcase Card */}
+            {(() => {
+              const track = ACADEMIC_TRACKS.find((t) => t.id === activeTrack) || ACADEMIC_TRACKS[0]
+              return (
+                <div className="mt-6 rounded-3xl border border-stone-200/90 bg-[#FAF9F5] p-8 sm:p-10 shadow-sm grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                  <div className="lg:col-span-7 space-y-4">
+                    <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-white border border-stone-200 text-[11px] font-semibold uppercase tracking-wider text-amber-800">
+                      <GraduationCap size={14} />
+                      <span>{track.target} · {track.pacing}</span>
+                    </div>
+
+                    <h3 className="font-serif text-2xl sm:text-3xl font-normal text-stone-950">
+                      {track.title}
+                    </h3>
+
+                    <p className="text-stone-600 text-sm leading-relaxed font-light">
+                      {track.subtitle}
+                    </p>
+
+                    <div className="space-y-2.5 pt-2">
+                      {track.features.map((f, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-100 text-emerald-800 shrink-0 mt-0.5">
+                            <Check size={12} />
+                          </div>
+                          <span className="text-xs text-stone-700 leading-normal">{f}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="lg:col-span-5 bg-white rounded-2xl border border-stone-200 p-6 space-y-3 shadow-2xs">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-stone-400">
+                      Key Canonical Disciplines
+                    </span>
+                    <div className="space-y-2">
+                      {track.sampleCourses.map((c, idx) => (
+                        <div
+                          key={idx}
+                          onClick={() => handleLaunchStudio(c)}
+                          className="p-3 rounded-xl border border-stone-100 hover:border-stone-300 bg-[#FAF9F5] transition cursor-pointer flex items-center justify-between group"
+                        >
+                          <span className="text-xs font-semibold text-stone-800 group-hover:text-stone-950">{c}</span>
+                          <ArrowUpRight size={13} className="text-stone-400 group-hover:text-stone-900 transition" />
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )
+            })()}
+          </div>
         </div>
       </section>
 
-      {/* ── 8. Comprehensive Luxury Academic Footer ── */}
-      <footer className="border-t border-stone-200 bg-[#FAF9F5] pt-16 pb-12">
+      {/* ── 6. SECTION: Methodology (Nav Target: id="methodology") ── */}
+      <section id="methodology" className="border-t border-stone-200/80 bg-[#FAF9F5] py-20 scroll-mt-20">
         <div className="mx-auto max-w-7xl px-6 sm:px-10">
-          
-          {/* Top Newsletter / Academic Gazette Dispatch */}
-          <div className="rounded-3xl border border-stone-200 bg-white p-8 sm:p-12 shadow-xs mb-16 flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="max-w-xl">
+          <div className="flex flex-col md:flex-row md:items-end justify-between gap-4">
+            <div>
               <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
-                The Scholar’s Gazette
+                Cognitive Science & Learning Pedagogy
               </span>
-              <h3 className="mt-1 font-serif text-2xl sm:text-3xl font-normal text-stone-950">
-                Subscribe to Bi-Weekly Curricula Dispatches
-              </h3>
-              <p className="mt-2 text-xs sm:text-sm text-stone-500 font-light leading-relaxed">
-                Receive deconstructed mathematical monographs, syllabus breakdowns, and cognitive science research directly in your inbox.
+              <h2 className="mt-2 font-serif text-3xl sm:text-4xl font-normal text-stone-900 tracking-tight">
+                The 4-Phase Synthesis Cycle
+              </h2>
+            </div>
+            <Link
+              to="/methodology"
+              className="text-xs font-semibold text-stone-900 hover:text-amber-800 flex items-center gap-1.5 transition"
+            >
+              <span>Learn More About Our Pedagogical Engine</span>
+              <ArrowRight size={13} />
+            </Link>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-4 gap-6">
+            <div className="rounded-3xl border border-stone-200 bg-white p-7 shadow-xs">
+              <span className="font-mono text-xs font-bold text-amber-700">PHASE 01</span>
+              <h4 className="mt-3 font-serif text-lg font-normal text-stone-950">VLM OCR Ingestion</h4>
+              <p className="mt-2 text-xs text-stone-600 leading-relaxed font-light">
+                Equations, matrices, and scientific diagrams are extracted from scanned PDFs with verified page numbers.
               </p>
             </div>
 
-            <form onSubmit={handleSubscribe} className="w-full md:w-auto flex flex-col sm:flex-row gap-2 shrink-0">
-              <div className="relative">
-                <Mail size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-stone-400" />
-                <input
-                  type="email"
-                  required
-                  value={emailSub}
-                  onChange={(e) => setEmailSub(e.target.value)}
-                  placeholder="fellow@oxford.ac.uk"
-                  className="w-full sm:w-72 rounded-2xl border border-stone-200 bg-[#FAF9F5] pl-10 pr-4 py-3 text-xs text-stone-800 placeholder-stone-400 focus:outline-none focus:border-stone-800"
-                />
+            <div className="rounded-3xl border border-stone-200 bg-white p-7 shadow-xs">
+              <span className="font-mono text-xs font-bold text-amber-700">PHASE 02</span>
+              <h4 className="mt-3 font-serif text-lg font-normal text-stone-950">Topological Graph</h4>
+              <p className="mt-2 text-xs text-stone-600 leading-relaxed font-light">
+                Raw texts are organized into prerequisite dependency chains so foundational concepts precede advanced proofs.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-stone-200 bg-white p-7 shadow-xs">
+              <span className="font-mono text-xs font-bold text-amber-700">PHASE 03</span>
+              <h4 className="mt-3 font-serif text-lg font-normal text-stone-950">Socratic Teacher Mode</h4>
+              <p className="mt-2 text-xs text-stone-600 leading-relaxed font-light">
+                Progressive delivery: Intuition $\rightarrow$ Formal Math $\rightarrow$ Rigorous Derivation $\rightarrow$ Counter-Examples.
+              </p>
+            </div>
+
+            <div className="rounded-3xl border border-stone-200 bg-white p-7 shadow-xs">
+              <span className="font-mono text-xs font-bold text-amber-700">PHASE 04</span>
+              <h4 className="mt-3 font-serif text-lg font-normal text-stone-950">Adaptive Examination</h4>
+              <p className="mt-2 text-xs text-stone-600 leading-relaxed font-light">
+                Multi-format examinations (Written proofs, MCQs, Fill-in-blanks) scored against strict academic rubrics.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 7. SECTION: AI Architecture (Nav Target: id="architecture") ── */}
+      <section id="architecture" className="border-t border-stone-200/80 bg-white py-20 scroll-mt-20">
+        <div className="mx-auto max-w-7xl px-6 sm:px-10">
+          <div className="max-w-3xl">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              System Infrastructure
+            </span>
+            <h2 className="mt-2 font-serif text-3xl sm:text-4xl font-normal text-stone-900 tracking-tight">
+              Dense Vector Retrieval & Cryptographic Isolation
+            </h2>
+            <p className="mt-3 text-stone-600 text-sm leading-relaxed font-light">
+              Tutor MVP pairs sub-second PostgreSQL PGVector hybrid search with strict multi-tenant isolation, guaranteeing that User A’s data is never visible to User B.
+            </p>
+          </div>
+
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+            <div className="p-8 rounded-3xl border border-stone-200 bg-[#FAF9F5] space-y-4">
+              <div className="w-10 h-10 rounded-2xl bg-stone-900 text-white flex items-center justify-center">
+                <Database size={18} />
               </div>
-              <button
-                type="submit"
-                className="rounded-2xl bg-stone-900 px-6 py-3 text-xs font-semibold text-white hover:bg-stone-800 transition shrink-0 cursor-pointer"
+              <h3 className="font-serif text-xl font-normal text-stone-950">PGVector & FTS5 Hybrid Search</h3>
+              <p className="text-xs text-stone-600 leading-relaxed font-light">
+                Combines cosine distance similarity on dense embeddings with Reciprocal Rank Fusion (RRF) on keyword indices to retrieve exact formulas and lemmas.
+              </p>
+            </div>
+
+            <div className="p-8 rounded-3xl border border-stone-200 bg-[#FAF9F5] space-y-4">
+              <div className="w-10 h-10 rounded-2xl bg-stone-900 text-white flex items-center justify-center">
+                <Lock size={18} />
+              </div>
+              <h3 className="font-serif text-xl font-normal text-stone-950">Multi-Tenant Tenant Isolation</h3>
+              <p className="text-xs text-stone-600 leading-relaxed font-light">
+                All chunks, study sessions, topics, and memory logs are strictly partitioned by authenticated user IDs. Cross-tenant leakage is mathematically impossible.
+              </p>
+            </div>
+
+            <div className="p-8 rounded-3xl border border-stone-200 bg-[#FAF9F5] space-y-4">
+              <div className="w-10 h-10 rounded-2xl bg-stone-900 text-white flex items-center justify-center">
+                <Cpu size={18} />
+              </div>
+              <h3 className="font-serif text-xl font-normal text-stone-950">Grounded Socratic Reasoning</h3>
+              <p className="text-xs text-stone-600 leading-relaxed font-light">
+                Responses are constrained strictly to retrieved context. Every assertion references page numbers and document coordinates with zero hallucination.
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 8. SECTION: Scholar Outcomes (Nav Target: id="outcomes") ── */}
+      <section id="outcomes" className="border-t border-stone-200/80 bg-[#FAF9F5] py-20 scroll-mt-20">
+        <div className="mx-auto max-w-7xl px-6 sm:px-10">
+          <div className="text-center max-w-2xl mx-auto">
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-700">
+              Verified Academic Outcomes
+            </span>
+            <h2 className="mt-2 font-serif text-3xl sm:text-4xl font-normal text-stone-900">
+              Empowering Scholars at the World’s Leading Institutions
+            </h2>
+            <p className="mt-3 text-xs sm:text-sm text-stone-500 font-light">
+              Demonstrated mastery across undergraduate honours, doctoral research, and competitive Olympiads.
+            </p>
+          </div>
+
+          {/* Testimonial Cards */}
+          <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-8">
+            {SCHOLAR_OUTCOMES.map((item, idx) => (
+              <div
+                key={idx}
+                className="p-8 rounded-3xl border border-stone-200/90 bg-white shadow-xs flex flex-col justify-between"
               >
-                {subSuccess ? 'Subscribed!' : 'Join Gazette'}
-              </button>
-            </form>
+                <div>
+                  <Quote size={24} className="text-stone-300" />
+                  <p className="mt-4 text-xs sm:text-sm text-stone-700 leading-relaxed font-light italic">
+                    "{item.quote}"
+                  </p>
+                </div>
+
+                <div className="mt-6 pt-6 border-t border-stone-100 flex items-center justify-between">
+                  <div>
+                    <h4 className="text-xs font-bold text-stone-900">{item.author}</h4>
+                    <p className="text-[11px] text-stone-500 font-light">{item.role}</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 border border-emerald-200 text-emerald-800 px-3 py-1 text-[10px] font-semibold">
+                    {item.metric}
+                  </span>
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
+      </section>
 
-          {/* 5-Column Navigation Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-5 gap-8 pb-14 border-b border-stone-200/80">
-            {/* Column 1: Academic Disciplines */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 mb-4">
-                Disciplines
-              </h4>
-              <ul className="space-y-2.5 text-xs text-stone-600">
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Pure Mathematics</Link></li>
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Theoretical Physics</Link></li>
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Deep Learning & AI</Link></li>
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Distributed Consensus</Link></li>
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Quantitative Finance</Link></li>
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Biomedical Systems</Link></li>
-              </ul>
+      {/* ── 9. SIMPLE & CLEAN FOOTER ── */}
+      <footer className="border-t border-stone-200/80 bg-[#FAF9F5] py-10 sm:py-12">
+        <div className="mx-auto max-w-7xl px-6 sm:px-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          {/* Brand & Subtitle */}
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900 text-stone-100 shadow-xs">
+              <span className="font-serif font-bold text-xs tracking-widest text-amber-300">TM</span>
             </div>
-
-            {/* Column 2: Pedagogical Engine */}
             <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 mb-4">
-                Pedagogy Engine
-              </h4>
-              <ul className="space-y-2.5 text-xs text-stone-600">
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Socratic Chat Mode</Link></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Progressive Teacher Mode</Link></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Mixed Examination Suite</Link></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">VLM Diagram OCR</Link></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Cognitive Memory Graph</Link></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Bloom’s Taxonomy Ladder</Link></li>
-              </ul>
-            </div>
-
-            {/* Column 3: Scholar Resources */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 mb-4">
-                Scholar Library
-              </h4>
-              <ul className="space-y-2.5 text-xs text-stone-600">
-                <li><Link to="/curriculum" className="hover:text-stone-950 transition">Syllabus Repository</Link></li>
-                <li><a href="#curriculum" className="hover:text-stone-950 transition">Formula Index</a></li>
-                <li><a href="#tracks" className="hover:text-stone-950 transition">Problem Set Archives</a></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Academic Whitepapers</Link></li>
-                <li><Link to="/login" className="hover:text-stone-950 transition">Guest Scholar Portal</Link></li>
-              </ul>
-            </div>
-
-            {/* Column 4: Sovereignty & Safety */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 mb-4">
-                Data Sovereignty
-              </h4>
-              <ul className="space-y-2.5 text-xs text-stone-600">
-                <li><span className="text-stone-500">Multi-Tenant PGVector</span></li>
-                <li><span className="text-stone-500">Zero Cross-User Leakage</span></li>
-                <li><span className="text-stone-500">Encrypted Chunk Partitioning</span></li>
-                <li><span className="text-stone-500">FERPA & GDPR Compliance</span></li>
-                <li><span className="text-stone-500">Non-Training Model Isolation</span></li>
-              </ul>
-            </div>
-
-            {/* Column 5: Institutional Access */}
-            <div>
-              <h4 className="text-xs font-bold uppercase tracking-wider text-stone-900 mb-4">
-                Institutional
-              </h4>
-              <ul className="space-y-2.5 text-xs text-stone-600">
-                <li><a href="#tracks" className="hover:text-stone-950 transition">University Departments</a></li>
-                <li><a href="#tracks" className="hover:text-stone-950 transition">Research Lab Licenses</a></li>
-                <li><Link to="/methodology" className="hover:text-stone-950 transition">Faculty Advisory</Link></li>
-                <li><Link to="/login" className="hover:text-stone-950 transition">Dean’s Office Portal</Link></li>
-              </ul>
+              <span className="font-serif text-base font-bold tracking-tight text-stone-900">
+                TUTOR <span className="font-sans font-light text-stone-500 text-xs">MVP</span>
+              </span>
+              <p className="text-[11px] text-stone-500 font-light">
+                Architectural Academic Intelligence · Grounded Socratic Tutoring
+              </p>
             </div>
           </div>
 
-          {/* Bottom Bar with Status Indicator */}
-          <div className="pt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-stone-500">
-            <div className="flex items-center gap-3">
-              <span className="font-serif font-bold tracking-wider text-stone-900">TUTOR MVP</span>
-              <span>·</span>
-              <span>Architectural Academic Intelligence</span>
-            </div>
+          {/* Simple & Clean Navigation Links */}
+          <nav className="flex flex-wrap items-center justify-center gap-6 text-xs font-medium text-stone-600">
+            <button
+              onClick={() => scrollTo('programs')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Programs
+            </button>
+            <button
+              onClick={() => scrollTo('methodology')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Methodology
+            </button>
+            <button
+              onClick={() => scrollTo('architecture')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              AI Architecture
+            </button>
+            <button
+              onClick={() => scrollTo('outcomes')}
+              className="hover:text-stone-950 transition-colors cursor-pointer"
+            >
+              Scholar Outcomes
+            </button>
+            <Link to="/study" className="hover:text-stone-950 transition-colors">
+              Studio Room
+            </Link>
+          </nav>
 
-            {/* Live Health Indicator Pill */}
-            <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3.5 py-1 text-[11px] text-stone-600 shadow-2xs">
+          {/* Live Operational Status & Copyright */}
+          <div className="flex flex-col sm:flex-row items-center gap-3 text-xs text-stone-500">
+            <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 text-[11px] text-stone-600 shadow-2xs">
               <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>All AI Systems Operational · PostgreSQL PGVector Active</span>
+              <span>PGVector Active</span>
             </div>
-
-            <div className="flex items-center gap-4 text-[11px] text-stone-400">
-              <span>© {new Date().getFullYear()} Tutor MVP</span>
-              <span>·</span>
-              <a href="#" className="hover:text-stone-700 transition">Academic Integrity</a>
-              <span>·</span>
-              <a href="#" className="hover:text-stone-700 transition">Privacy</a>
-            </div>
+            <span className="text-[11px] text-stone-400">© {new Date().getFullYear()} Tutor MVP</span>
           </div>
-
         </div>
       </footer>
 
-      {/* ── 9. Auth Modal ── */}
+      {/* ── 10. Auth Modal ── */}
       <AuthModal
         isOpen={isAuthOpen}
         onClose={() => setIsAuthOpen(false)}

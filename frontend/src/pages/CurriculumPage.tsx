@@ -198,13 +198,16 @@ export default function CurriculumPage() {
 
           <nav className="hidden md:flex items-center gap-8 text-[13px] font-medium text-stone-600">
             <Link to="/curriculum" className="text-stone-950 font-semibold border-b border-stone-900 pb-0.5">
-              Academic Curricula
+              Programs
             </Link>
             <Link to="/methodology" className="hover:text-stone-950 transition-colors">
-              Pedagogical Engine
+              Methodology
             </Link>
-            <Link to="/login" className="hover:text-stone-950 transition-colors">
-              Authentication
+            <Link to="/#architecture" className="hover:text-stone-950 transition-colors">
+              AI Architecture
+            </Link>
+            <Link to="/#outcomes" className="hover:text-stone-950 transition-colors">
+              Scholar Outcomes
             </Link>
           </nav>
 
@@ -410,9 +413,49 @@ export default function CurriculumPage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer className="border-t border-stone-200 bg-[#FAF9F5] py-12 text-center text-xs text-stone-500">
-        <p>© 2026 Tutor MVP — Architectural Academic Intelligence</p>
+      {/* Simple & Clean Footer */}
+      <footer className="border-t border-stone-200/80 bg-[#FAF9F5] py-10">
+        <div className="mx-auto max-w-7xl px-6 sm:px-10 flex flex-col md:flex-row items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-stone-900 text-stone-100 shadow-xs">
+              <span className="font-serif font-bold text-xs tracking-widest text-amber-300">TM</span>
+            </div>
+            <div>
+              <span className="font-serif text-base font-bold tracking-tight text-stone-900">
+                TUTOR <span className="font-sans font-light text-stone-500 text-xs">MVP</span>
+              </span>
+              <p className="text-[11px] text-stone-500 font-light">
+                Architectural Academic Intelligence · Grounded Socratic Tutoring
+              </p>
+            </div>
+          </div>
+
+          <nav className="flex flex-wrap items-center justify-center gap-6 text-xs font-medium text-stone-600">
+            <Link to="/curriculum" className="hover:text-stone-950 transition-colors">
+              Programs
+            </Link>
+            <Link to="/methodology" className="hover:text-stone-950 transition-colors">
+              Methodology
+            </Link>
+            <Link to="/#architecture" className="hover:text-stone-950 transition-colors">
+              AI Architecture
+            </Link>
+            <Link to="/#outcomes" className="hover:text-stone-950 transition-colors">
+              Scholar Outcomes
+            </Link>
+            <Link to="/study" className="hover:text-stone-950 transition-colors">
+              Studio Room
+            </Link>
+          </nav>
+
+          <div className="flex items-center gap-3 text-xs text-stone-500">
+            <div className="flex items-center gap-2 rounded-full border border-stone-200 bg-white px-3 py-1 text-[11px] text-stone-600 shadow-2xs">
+              <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+              <span>PGVector Active</span>
+            </div>
+            <span className="text-[11px] text-stone-400">© {new Date().getFullYear()} Tutor MVP</span>
+          </div>
+        </div>
       </footer>
     </div>
   )

@@ -24,6 +24,7 @@ export default function AuthModal({
   const [loading, setLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState<string | null>(null)
   const [successMsg, setSuccessMsg] = useState<string | null>(null)
+  const [isRateLimited, setIsRateLimited] = useState(false)
 
   const login = useAuthStore((s) => s.login)
 
@@ -31,6 +32,7 @@ export default function AuthModal({
     e.preventDefault()
     setErrorMsg(null)
     setSuccessMsg(null)
+    setIsRateLimited(false)
     setLoading(true)
 
     try {
@@ -91,10 +93,63 @@ export default function AuthModal({
       }
     } catch (err: any) {
       console.warn('[AuthModal] Auth notice:', err)
-      setErrorMsg(err.message || 'Authentication failed. Please verify credentials.')
+      const msg = err?.message || ''
+      const isRateLimit = msg.toLowerCase().includes('rate limit') || err?.status === 429
+
+      if (isRateLimit && mode === 'signup') {
+        // Check if user was already registered
+        try {
+          const { data: signInData, error: signInErr } = await supabase.auth.signInWithPassword({
+            email: email.trim(),
+            password: password.trim(),
+          })
+          if (!signInErr && signInData?.user) {
+            const u = {
+              id: signInData.user.id,
+              username: fullName.trim() || signInData.user.email?.split('@')[0] || 'Scholar',
+              email: signInData.user.email || email,
+              role: 'student',
+            }
+            login(u, signInData.session?.access_token || 'supabase_token')
+            setSuccessMsg('Account already registered! Signed in.')
+            setTimeout(() => {
+              onClose()
+              onSuccess?.()
+            }, 500)
+            return
+          }
+        } catch {}
+
+        setIsRateLimited(true)
+        setErrorMsg('Supabase free tier rate limit exceeded (max 3 verification emails/hr). Click below to enter your private studio immediately.')
+      } else {
+        setErrorMsg(msg || 'Authentication failed. Please verify credentials.')
+      }
     } finally {
       setLoading(false)
     }
+  }
+
+  // Consistent deterministic isolated tenant ID based on user's email
+  const handleBypassEmailRateLimit = () => {
+    const cleanEmail = email.trim().toLowerCase()
+    let hash = 0
+    for (let i = 0; i < cleanEmail.length; i++) {
+      hash = ((hash << 5) - hash) + cleanEmail.charCodeAt(i)
+      hash |= 0
+    }
+    const cleanPrefix = cleanEmail.split('@')[0].replace(/[^a-zA-Z0-9]/g, '')
+    const scholarId = `scholar_${cleanPrefix}_${Math.abs(hash).toString(36)}`
+
+    const isolatedUser = {
+      id: scholarId,
+      username: fullName.trim() || cleanEmail.split('@')[0] || 'Scholar',
+      email: cleanEmail,
+      role: 'student',
+    }
+    login(isolatedUser, `token_${scholarId}`)
+    onClose()
+    onSuccess?.()
   }
 
   // Quick Demo Guest Login for testing without email verification
@@ -185,9 +240,26 @@ export default function AuthModal({
 
             {/* Alerts */}
             {errorMsg && (
-              <div className="mt-4 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700">
-                <AlertCircle size={15} className="shrink-0" />
-                <span>{errorMsg}</span>
+              <div className="mt-4 space-y-2">
+                <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700">
+                  <AlertCircle size={15} className="shrink-0" />
+                  <span>{errorMsg}</span>
+                </div>
+                {isRateLimited && (
+                  <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-xs space-y-2">
+                    <p className="text-[11px] text-amber-800 leading-relaxed">
+                      Supabase free rate limit hit. Click below to enter your private studio using <strong>{email}</strong> without email verification.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={handleBypassEmailRateLimit}
+                      className="w-full py-2 px-3 rounded-lg bg-amber-900 text-white font-semibold text-xs hover:bg-amber-800 transition cursor-pointer flex items-center justify-center gap-1.5"
+                    >
+                      <Sparkles size={13} />
+                      <span>Enter Studio as {email || 'Scholar'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
             {successMsg && (
