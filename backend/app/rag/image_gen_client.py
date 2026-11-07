@@ -22,7 +22,7 @@ def _get_active_env() -> Dict[str, str]:
     return {
         "AZURE_OPENAI_API_KEY": (vals.get("AZURE_OPENAI_API_KEY") or os.environ.get("AZURE_OPENAI_API_KEY") or "").strip(),
         "AZURE_OPENAI_ENDPOINT": (vals.get("AZURE_OPENAI_ENDPOINT") or os.environ.get("AZURE_OPENAI_ENDPOINT") or "").strip(),
-        "AZURE_OPENAI_DALLE_DEPLOYMENT": (vals.get("AZURE_OPENAI_DALLE_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DALLE_DEPLOYMENT") or "dall-e-3").strip(),
+        "AZURE_OPENAI_DALLE_DEPLOYMENT": (vals.get("AZURE_OPENAI_DALLE_DEPLOYMENT") or os.environ.get("AZURE_OPENAI_DALLE_DEPLOYMENT") or "").strip(),
         "OPENAI_API_KEY": (vals.get("OPENAI_API_KEY") or os.environ.get("OPENAI_API_KEY") or "").strip(),
         "OPENAI_BASE_URL": (vals.get("OPENAI_BASE_URL") or os.environ.get("OPENAI_BASE_URL") or "https://api.openai.com/v1").strip(),
     }
@@ -34,7 +34,7 @@ class OpenAIImageClient:
 
     def is_configured(self) -> bool:
         env = _get_active_env()
-        has_azure = bool(env["AZURE_OPENAI_API_KEY"] and env["AZURE_OPENAI_ENDPOINT"])
+        has_azure = bool(env["AZURE_OPENAI_API_KEY"] and env["AZURE_OPENAI_ENDPOINT"] and env["AZURE_OPENAI_DALLE_DEPLOYMENT"])
         has_openai = bool(env["OPENAI_API_KEY"])
         return has_azure or has_openai
 
