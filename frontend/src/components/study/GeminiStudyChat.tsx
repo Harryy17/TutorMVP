@@ -914,7 +914,14 @@ export default function GeminiStudyChat({
             </div>
             <div className="flex items-center gap-3">
               <button
-                onClick={() => { setStep('ask_subject'); setMessages([]); setSubject('') }}
+                onClick={() => {
+                  setStep('ask_subject')
+                  setMessages([])
+                  setSubject('')
+                  setExtractedTopics([])
+                  setSessionId('')
+                  if (onSessionChange) onSessionChange('')
+                }}
                 className="text-xs font-medium cursor-pointer transition-colors shrink-0"
                 style={{ color: 'var(--ink-faint)' }}
                 onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ink)')}
