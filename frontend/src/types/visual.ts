@@ -76,3 +76,4 @@ export interface VisualSpecification {
   math_data?: MathIllustrationData
   timeline_data?: TimelineItem[]
 }
+

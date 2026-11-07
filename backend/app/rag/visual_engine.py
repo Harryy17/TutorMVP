@@ -462,3 +462,4 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
 
 
 visual_engine = VisualExplanationEngine()
+
