@@ -204,6 +204,18 @@ class QueryAnalyzerAgent:
                 recommended_action="GREET",
             ).as_dict()
 
+        # High-Speed Fast-Path Heuristic: Standard questions, comparisons, quizzes, notes, or topics
+        # evaluate in sub-millisecond time, cutting 4-8s of unnecessary LLM roundtrips!
+        is_obvious_intent = (
+            len(raw_msg.split()) < 35
+            or any(lower.startswith(w) for w in ["what", "how", "why", "when", "where", "which", "explain", "describe", "compare", "difference", "list", "summarize", "define", "give me", "make", "create", "quiz", "test", "show", "can you"])
+            or "?" in raw_msg
+        )
+        if is_obvious_intent:
+            heuristic = self._heuristic_plan(raw_msg, current_subject)
+            heuristic.confidence = 0.90
+            return heuristic.as_dict()
+
         plan = await self._plan_with_retries(raw_msg, current_subject, history)
         return plan.as_dict()
 
@@ -353,14 +365,14 @@ class QueryAnalyzerAgent:
         is_study_notes = bool(re.search(
             r"\b(study notes?|cheat sheet|revision notes?|study map|summari[sz]e.*as notes)\b", lower
         ))
-        is_question = bool(re.search(
+        is_diagram = bool(re.search(r"\b(diagram|architecture|figure|visual|image|flowchart|schematic|workflow)\b", lower))
+        is_question = is_diagram or bool(re.search(
             r"\b(what|how|why|when|where|which|explain|describe|difference|types|"
-            r"summarize|important|concepts|compare)\b|\?",
+            r"summarize|important|concepts|compare|show|draw|visualize|illustrate|step by step)\b|\?",
             lower,
         ))
         is_quiz = bool(re.search(r"\b(quiz|test me|ask me|practice questions)\b", lower))
         is_comparison = bool(re.search(r"\b(vs|versus|compare|difference|trade-?offs?)\b", lower))
-        is_diagram = bool(re.search(r"\b(diagram|architecture|figure|visual|image)\b", lower))
 
         # Heuristic length & style detection
         length_constraint = None
@@ -434,7 +446,9 @@ class QueryAnalyzerAgent:
                 suppress_scaffolding=suppress_scaffolding,
                 requires_table_data=is_comparison or output_style == "table",
                 requires_image_data=is_diagram,
-                confidence=0.4,
+                visual_modality="generative_diagram" if is_diagram else "none",
+                suggested_diagram_type="architecture" if "architecture" in lower else ("flowchart" if is_diagram else None),
+                confidence=0.9,
                 needs_clarification=False,
                 recommended_action="EXPLAIN",
             )

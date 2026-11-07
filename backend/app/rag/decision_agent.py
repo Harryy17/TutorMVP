@@ -527,7 +527,7 @@ Respond with ONLY this JSON object:
         is_expl = data.get("is_explanation", True)
 
         is_question = bool(re.search(
-            r"\b(what|how|why|when|where|which|explain|describe|difference|types|summarize|important|concepts)\b|\?",
+            r"\b(what|how|why|when|where|which|explain|describe|difference|types|summarize|important|concepts|show|diagram|architecture|compare|illustrate|visualize|flowchart)\b|\?",
             message.lower(),
         ))
         if is_question:

@@ -57,6 +57,15 @@ class GptSolClient:
 
     def __init__(self):
         self.timeout = 45.0
+        self._shared_client: Optional[httpx.AsyncClient] = None
+
+    def _get_client(self) -> httpx.AsyncClient:
+        if self._shared_client is None or self._shared_client.is_closed:
+            self._shared_client = httpx.AsyncClient(
+                timeout=httpx.Timeout(self.timeout, connect=10.0),
+                limits=httpx.Limits(max_keepalive_connections=15, max_connections=30),
+            )
+        return self._shared_client
 
     @property
     def api_key(self) -> str:
@@ -111,19 +120,19 @@ class GptSolClient:
             (url2, {**payload, "model": deployment}),
         ]
 
+        client = self._get_client()
         for target_url, target_payload in attempts:
             try:
-                async with httpx.AsyncClient(timeout=self.timeout) as client:
-                    r = await client.post(target_url, headers=headers, json=target_payload)
-                    if r.status_code == 200:
-                        data = r.json()
-                        choices = data.get("choices", [])
-                        if choices:
-                            content = choices[0].get("message", {}).get("content", "")
-                            if content and content.strip():
-                                return content.strip()
-                    else:
-                        print(f"[gpt-6-sol] API returned {r.status_code} on {target_url}: {r.text[:140]}")
+                r = await client.post(target_url, headers=headers, json=target_payload)
+                if r.status_code == 200:
+                    data = r.json()
+                    choices = data.get("choices", [])
+                    if choices:
+                        content = choices[0].get("message", {}).get("content", "")
+                        if content and content.strip():
+                            return content.strip()
+                else:
+                    print(f"[gpt-6-sol] API returned {r.status_code} on {target_url}: {r.text[:140]}")
             except Exception as e:
                 print(f"[gpt-6-sol] Chat exception on {target_url}: {e}")
         return None
