@@ -311,13 +311,13 @@ class PgVectorStore:
         target_sid = session_id or doc_id
 
         if not self.is_configured():
-            return self._mem_text_search(query, target_sid, limit)
+            return self._mem_text_search(query, target_sid, limit, user_id=user_id)
 
         conn = None
         try:
             conn = self._get_connection()
             if not conn:
-                return self._mem_text_search(query, target_sid, limit)
+                return self._mem_text_search(query, target_sid, limit, user_id=user_id)
 
             clean_q = re.sub(r"[^\w\s]", " ", query).strip()
             tokens = [w for w in clean_q.split() if len(w) > 2]
@@ -331,7 +331,7 @@ class PgVectorStore:
                 params.extend([target_sid, target_sid])
 
             if user_id:
-                clauses.append("(user_id = %s OR user_id = 'default_user')")
+                clauses.append("user_id = %s")
                 params.append(user_id)
 
             where_sql = " AND ".join(clauses)
@@ -386,8 +386,15 @@ class PgVectorStore:
             if conn:
                 conn.close()
 
-    def _mem_text_search(self, query: str, session_id: Optional[str], limit: int) -> List[Dict[str, Any]]:
-        chunks = self._mem_chunks.get(session_id or "", [])
+    def _mem_text_search(self, query: str, session_id: Optional[str], limit: int, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
+        if session_id:
+            chunks = list(self._mem_chunks.get(session_id, []))
+        else:
+            chunks = [c for c_list in self._mem_chunks.values() for c in c_list]
+
+        if user_id:
+            chunks = [c for c in chunks if c.get("user_id") == user_id]
+
         q_words = set(re.findall(r"\w+", query.lower()))
         scored = []
         for c in chunks:
@@ -407,6 +414,7 @@ class PgVectorStore:
                 "rank": float(s),
             }
             for s, c in scored[:limit]
+            if s > 0
         ]
 
     # ─── RETRIEVAL: VECTOR SIMILARITY SEARCH ─────────────────────────────────
@@ -437,7 +445,7 @@ class PgVectorStore:
                 params.extend([target_sid, target_sid])
 
             if user_id:
-                clauses.append("(user_id = %s OR user_id = 'default_user')")
+                clauses.append("user_id = %s")
                 params.append(user_id)
 
             where_sql = " AND ".join(clauses)
@@ -545,7 +553,7 @@ class PgVectorStore:
                 clauses = ["(session_id = %s OR doc_id = %s)", "page_number = %s"]
                 params: List[Any] = [target_sid, doc_id, page]
                 if user_id:
-                    clauses.append("(user_id = %s OR user_id = 'default_user')")
+                    clauses.append("user_id = %s")
                     params.append(user_id)
                 where_sql = " AND ".join(clauses)
 
@@ -582,7 +590,7 @@ class PgVectorStore:
                     cur.execute("""
                         SELECT content FROM document_chunks
                         WHERE (session_id = %s OR doc_id = %s)
-                          AND (user_id = %s OR user_id = 'default_user')
+                          AND user_id = %s
                         ORDER BY page_number ASC, chunk_index ASC
                         LIMIT 40;
                     """, (target_sid, doc_id, user_id))
@@ -752,20 +760,26 @@ class PgVectorStore:
     def get_session_state(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Retrieves session metadata, topics, and messages from PostgreSQL."""
         if not self.is_configured():
-            return self._mem_sessions.get(session_id)
+            mem = self._mem_sessions.get(session_id)
+            if mem and user_id and mem.get("meta", {}).get("user_id") and mem.get("meta", {}).get("user_id") != user_id:
+                return None
+            return mem
 
         conn = None
         try:
             conn = self._get_connection()
             if not conn:
-                return self._mem_sessions.get(session_id)
+                mem = self._mem_sessions.get(session_id)
+                if mem and user_id and mem.get("meta", {}).get("user_id") and mem.get("meta", {}).get("user_id") != user_id:
+                    return None
+                return mem
 
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 # 1. Fetch study_sessions
                 if user_id:
                     cur.execute("""
                         SELECT session_id, user_id, subject, title, file_name, created_at, updated_at, metadata
-                        FROM study_sessions WHERE session_id = %s AND (user_id = %s OR user_id = 'default_user');
+                        FROM study_sessions WHERE session_id = %s AND user_id = %s;
                     """, (session_id, user_id))
                 else:
                     cur.execute("""
@@ -774,7 +788,10 @@ class PgVectorStore:
                     """, (session_id,))
                 sess_row = cur.fetchone()
                 if not sess_row:
-                    return self._mem_sessions.get(session_id)
+                    mem_s = self._mem_sessions.get(session_id)
+                    if mem_s and user_id and mem_s.get("meta", {}).get("user_id") != user_id:
+                        return None
+                    return mem_s
 
                 # 2. Fetch session_topics
                 cur.execute("""
@@ -840,7 +857,7 @@ class PgVectorStore:
         """Lists all study sessions stored in PostgreSQL, partitioned by user_id."""
         if not self.is_configured():
             if user_id:
-                return [v.get("meta", {}) for v in self._mem_sessions.values() if v.get("meta", {}).get("user_id") in [user_id, "default_user"]]
+                return [v.get("meta", {}) for v in self._mem_sessions.values() if v.get("meta", {}).get("user_id") == user_id]
             return [v.get("meta", {}) for v in self._mem_sessions.values()]
 
         conn = None
@@ -853,7 +870,7 @@ class PgVectorStore:
                     cur.execute("""
                         SELECT session_id AS id, user_id, subject, title, file_name, created_at, updated_at
                         FROM study_sessions
-                        WHERE user_id = %s OR user_id = 'default_user'
+                        WHERE user_id = %s
                         ORDER BY updated_at DESC;
                     """, (user_id,))
                 else:
@@ -886,7 +903,7 @@ class PgVectorStore:
                 return False
             with conn.cursor() as cur:
                 if user_id:
-                    cur.execute("DELETE FROM study_sessions WHERE session_id = %s AND (user_id = %s OR user_id = 'default_user');", (session_id, user_id))
+                    cur.execute("DELETE FROM study_sessions WHERE session_id = %s AND user_id = %s;", (session_id, user_id))
                 else:
                     cur.execute("DELETE FROM study_sessions WHERE session_id = %s;", (session_id,))
                 conn.commit()

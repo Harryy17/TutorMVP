@@ -95,22 +95,14 @@ class SessionManager:
             user_id=user_id,
         )
 
-    def load_session_state(self, session_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    def load_session_state(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Loads all saved messages, topics, and metadata from PostgreSQL."""
         state = self.store.get_session_state(session_id, user_id=user_id)
         if state:
             return state
-        return {
-            "meta": {
-                "session_id": session_id,
-                "title": "Study Session",
-                "subject": "General",
-            },
-            "messages": [],
-            "topics": [],
-        }
+        return None
 
-    def get_session_state(self, session_id: str, user_id: Optional[str] = None) -> Dict[str, Any]:
+    def get_session_state(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Alias for load_session_state."""
         return self.load_session_state(session_id, user_id=user_id)
 

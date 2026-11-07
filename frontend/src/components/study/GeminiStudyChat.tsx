@@ -1,11 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   Send, Plus, FileText, X, Loader2, Mic, MicOff,
   Sparkles, ArrowRight, ArrowDown, BookOpen, Compass, Layers,
   ChevronRight, ChevronDown, Paperclip, CheckCircle2,
   Menu, PanelRightClose, PanelRightOpen, Volume2, VolumeX, Square,
-  Clock, Brain, GraduationCap, Download, Code2, Maximize2
+  Clock, Brain, GraduationCap, Download, Code2, Maximize2, LogOut
 } from 'lucide-react'
 
 
@@ -19,6 +20,7 @@ import ChatInputForm from './ChatInputForm'
 import MarkdownArtifactViewer from './MarkdownArtifactViewer'
 import { DocumentFigureCard } from './DocumentFigureCard'
 import { studyApi } from '../../services/api'
+import { useAuthStore } from '../../stores/authStore'
 import { cleanAcademicText } from '../../utils/textFormatter'
 import { exportNotesToPdf } from '../../utils/exportPdf'
 
@@ -104,6 +106,14 @@ export default function GeminiStudyChat({
   onOpenStudyMap,
   onOpenMobileSidebar,
 }: GeminiStudyChatProps) {
+  const navigate = useNavigate()
+  const logout = useAuthStore((s) => s.logout)
+
+  const handleSignOut = () => {
+    logout()
+    navigate('/login')
+  }
+
   const [step, setStep] = useState<'ask_subject' | 'conversing' | 'analyzing' | 'topics_ready'>('ask_subject')
   const [subject, setSubject] = useState('')
   const [inputVal, setInputVal] = useState('')
@@ -790,19 +800,36 @@ export default function GeminiStudyChat({
       {/* ── Welcome Screen ── */}
       {step === 'ask_subject' && (
         <div className="w-full h-full flex flex-col items-center justify-center text-center overflow-y-auto custom-scrollbar px-4 sm:px-6 py-4 pb-28">
-          {/* Mobile Top Bar */}
-          {onOpenMobileSidebar && (
-            <div className="md:hidden w-full flex items-center justify-between pb-3 border-b border-[var(--paper-rule)] mb-6">
+          {/* Top Bar */}
+          <div className="w-full flex items-center justify-between pb-3 border-b border-[var(--paper-rule)] mb-6">
+            {onOpenMobileSidebar ? (
               <button
                 onClick={onOpenMobileSidebar}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--white)] border border-[var(--paper-rule)] text-xs font-semibold text-[var(--ink)] shadow-2xs cursor-pointer"
+                className="md:hidden flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[var(--white)] border border-[var(--paper-rule)] text-xs font-semibold text-[var(--ink)] shadow-2xs cursor-pointer"
               >
                 <Menu size={15} />
                 <span>Workspaces</span>
               </button>
-              <span className="text-[11px] font-mono text-[var(--ink-soft)] uppercase tracking-wider font-semibold">IndieTutor</span>
+            ) : (
+              <div />
+            )}
+            <div className="flex items-center gap-2 ml-auto">
+              <span
+                className="hidden sm:inline-block text-[11px] font-mono px-2 py-0.5 rounded-full border text-[var(--ink-soft)]"
+                style={{ background: 'var(--sage-soft)', borderColor: 'var(--paper-rule)' }}
+              >
+                {userName}
+              </span>
+              <button
+                onClick={handleSignOut}
+                title="Sign Out"
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer"
+              >
+                <LogOut size={13} />
+                <span>Sign Out</span>
+              </button>
             </div>
-          )}
+          </div>
 
           {/* Notebook logo mark */}
           <div className="mb-6 flex flex-col items-center gap-1">
@@ -878,15 +905,25 @@ export default function GeminiStudyChat({
                 {subject ? subject : 'Study Session'}
               </span>
             </div>
-            <button
-              onClick={() => { setStep('ask_subject'); setMessages([]); setSubject('') }}
-              className="text-xs font-medium cursor-pointer transition-colors shrink-0"
-              style={{ color: 'var(--ink-faint)' }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ink)')}
-              onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ink-faint)')}
-            >
-              ← New Topic
-            </button>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => { setStep('ask_subject'); setMessages([]); setSubject('') }}
+                className="text-xs font-medium cursor-pointer transition-colors shrink-0"
+                style={{ color: 'var(--ink-faint)' }}
+                onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--ink)')}
+                onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--ink-faint)')}
+              >
+                ← New Topic
+              </button>
+              <button
+                onClick={handleSignOut}
+                title="Sign Out"
+                className="flex items-center gap-1 text-xs font-medium text-slate-500 hover:text-red-600 transition-colors cursor-pointer shrink-0"
+              >
+                <LogOut size={13} />
+                <span className="hidden sm:inline">Sign Out</span>
+              </button>
+            </div>
           </div>
 
 

@@ -4,7 +4,7 @@ import { Link, useNavigate } from 'react-router-dom'
 import {
   Sparkles, ArrowRight, BookOpen, GraduationCap, Search,
   Star, Clock, CheckCircle2, Layers, Filter, Compass,
-  ChevronRight, Brain, FileText, ArrowUpRight
+  ChevronRight, Brain, FileText, ArrowUpRight, LogOut
 } from 'lucide-react'
 import { useAuthStore } from '../stores/authStore'
 
@@ -163,6 +163,7 @@ const DISCIPLINES: SyllabusModule[] = [
 export default function CurriculumPage() {
   const navigate = useNavigate()
   const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
   const [selectedLevel, setSelectedLevel] = useState<string>('All')
   const [searchQuery, setSearchQuery] = useState('')
   const [activeModule, setActiveModule] = useState<SyllabusModule>(DISCIPLINES[0])
@@ -212,13 +213,33 @@ export default function CurriculumPage() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => handleLaunch(activeModule.title)}
-              className="flex items-center gap-1.5 rounded-full bg-stone-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
-            >
-              <span>Launch Studio</span>
-              <ArrowRight size={13} />
-            </button>
+            {user ? (
+              <>
+                <button
+                  onClick={() => handleLaunch(activeModule.title)}
+                  className="flex items-center gap-1.5 rounded-full bg-stone-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition cursor-pointer"
+                >
+                  <span>Launch Studio</span>
+                  <ArrowRight size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  title="Sign Out"
+                  className="rounded-full border border-stone-200 bg-white p-2 text-stone-500 hover:text-red-600 hover:border-red-200 transition cursor-pointer"
+                >
+                  <LogOut size={14} />
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center gap-1.5 rounded-full bg-stone-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
+              >
+                <span>Sign In</span>
+                <ArrowRight size={13} />
+              </Link>
+            )}
           </div>
         </div>
       </header>

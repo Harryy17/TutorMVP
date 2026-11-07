@@ -156,7 +156,10 @@ async def get_study_session(
 ):
     """Load session state, topics, and conversation messages for the user."""
     uid = get_auth_user_id(authorization, x_user_id)
-    return session_manager.load_session_state(session_id, user_id=uid)
+    state = session_manager.load_session_state(session_id, user_id=uid)
+    if not state:
+        raise HTTPException(status_code=404, detail="Study session not found")
+    return state
 
 
 @router.post("/sessions/{session_id}/state")
@@ -188,7 +191,7 @@ async def delete_study_session(
     """Delete a study session owned by the user."""
     uid = get_auth_user_id(authorization, x_user_id)
     session_manager.delete_session(session_id, user_id=uid)
-    if session_id in _study_sessions:
+    if session_id in _study_sessions and _study_sessions[session_id].get("user_id") in [uid, None]:
         del _study_sessions[session_id]
     return {"success": True}
 
@@ -217,7 +220,7 @@ async def chat_with_decision_agent(
     user_id = uid
 
     if body.session_id:
-        if body.session_id in _study_sessions:
+        if body.session_id in _study_sessions and _study_sessions[body.session_id].get("user_id") in [user_id, None]:
             session = _study_sessions[body.session_id]
             file_name = session.get("file_name")
             if not body.current_subject:
@@ -260,7 +263,7 @@ async def chat_with_decision_agent(
 
     # 3. If query asks for topics, curriculum, or overview, inject session topics into context
     session_topics = []
-    if body.session_id and body.session_id in _study_sessions:
+    if body.session_id and body.session_id in _study_sessions and _study_sessions[body.session_id].get("user_id") in [user_id, None]:
         session_topics = _study_sessions[body.session_id].get("topics", [])
     elif body.session_id:
         saved_state = session_manager.get_session_state(body.session_id, user_id=user_id)
@@ -497,9 +500,11 @@ async def get_active_study_session(
     """Retrieve details and topics for an active study session."""
     uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(study_id)
+    if session and session.get("user_id") and uid and session.get("user_id") != uid:
+        session = None
     if not session:
         session = session_manager.get_session_state(study_id, user_id=uid)
-    if not session:
+    if not session or (session.get("meta", {}).get("user_id") and uid and session.get("meta", {}).get("user_id") != uid):
         raise HTTPException(status_code=404, detail="Study session not found")
     return session
 
@@ -514,6 +519,8 @@ async def get_topic_core_idea(
     """Print the core idea of a topic for Normal Mode."""
     uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(body.session_id, {})
+    if session.get("user_id") and uid and session.get("user_id") != uid:
+        session = {}
     context = doc_processor.get_document_text(body.session_id, max_chars=5000, user_id=uid)
     if not context and session.get("file_path"):
         ext = Path(session["file_path"]).suffix.lower()
@@ -583,6 +590,8 @@ async def stream_teacher_mode(
     """
     uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(session_id, {})
+    if session.get("user_id") and uid and session.get("user_id") != uid:
+        session = {}
     context = doc_processor.get_document_text(session_id, max_chars=8000, user_id=uid)
     if not context and session.get("file_path"):
         ext = Path(session["file_path"]).suffix.lower()
@@ -627,6 +636,8 @@ async def generate_topic_exam(
     """
     uid = get_auth_user_id(authorization, x_user_id)
     session = _study_sessions.get(body.session_id, {})
+    if session.get("user_id") and uid and session.get("user_id") != uid:
+        session = {}
     context = doc_processor.get_document_text(body.session_id, max_chars=6000, user_id=uid)
     if not context and session.get("file_path"):
         ext = Path(session["file_path"]).suffix.lower()

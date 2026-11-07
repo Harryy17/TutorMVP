@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
 import {
   Plus,
   BookOpen,
@@ -10,7 +11,10 @@ import {
   Layers,
   MessageSquare,
   X,
+  LogOut,
+  User,
 } from 'lucide-react'
+import { useAuthStore } from '../../stores/authStore'
 import { studyApi } from '../../services/api'
 import type { StudySessionMeta } from '../../services/api'
 
@@ -37,6 +41,15 @@ export default function SessionSidebar({
   const [sessions, setSessions] = useState<StudySessionMeta[]>([])
   const [loading, setLoading] = useState(false)
   const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
+  const navigate = useNavigate()
+
+  const handleSignOut = () => {
+    logout()
+    navigate('/login')
+  }
 
   const fetchSessions = async () => {
     try {
@@ -284,6 +297,61 @@ export default function SessionSidebar({
           })}
         </div>
 
+        {/* ── User Profile & Sign Out Footer ── */}
+        <div className="p-3 border-t border-[var(--paper-rule)] bg-[var(--paper)] mt-auto select-none">
+          {!collapsed ? (
+            <div className="flex items-center justify-between gap-2.5">
+              <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                <div
+                  className="w-8 h-8 rounded-full flex items-center justify-center font-bold text-xs uppercase shrink-0 border"
+                  style={{
+                    background: 'var(--sage-soft)',
+                    borderColor: 'var(--paper-rule)',
+                    color: 'var(--ink)',
+                    fontFamily: 'var(--font-mono)',
+                  }}
+                >
+                  {user?.username ? user.username.charAt(0).toUpperCase() : <User className="w-3.5 h-3.5" />}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p
+                    className="text-xs font-semibold text-[var(--ink)] truncate"
+                    title={user?.username || 'Student'}
+                    style={{ fontFamily: 'var(--font-serif)' }}
+                  >
+                    {user?.username || 'Student'}
+                  </p>
+                  <p
+                    className="text-[10px] text-[var(--ink-soft)] truncate"
+                    title={user?.email || ''}
+                    style={{ fontFamily: 'var(--font-mono)' }}
+                  >
+                    {user?.email || 'Scholar Account'}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                onClick={handleSignOut}
+                title="Sign Out"
+                className="flex items-center gap-1.5 px-2 py-1.5 rounded-lg text-xs font-medium text-slate-500 hover:text-red-600 hover:bg-red-50 border border-transparent hover:border-red-200 transition-all cursor-pointer shrink-0"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span className="text-[11px]">Sign Out</span>
+              </button>
+            </div>
+          ) : (
+            <div className="flex justify-center">
+              <button
+                onClick={handleSignOut}
+                title={`Sign Out (${user?.username || 'Scholar'})`}
+                className="p-2 rounded-xl text-slate-500 hover:text-red-600 hover:bg-red-50 transition-colors cursor-pointer"
+              >
+                <LogOut className="w-4 h-4" />
+              </button>
+            </div>
+          )}
+        </div>
 
       </div>
     )

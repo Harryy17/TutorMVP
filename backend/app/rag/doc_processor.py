@@ -72,8 +72,11 @@ class DocumentProcessor:
         self._docs: Dict[str, DocumentRecord] = {}
         self.vlm = vlm_client
 
-    def get_document(self, doc_id: str) -> Optional[DocumentRecord]:
-        return self._docs.get(doc_id)
+    def get_document(self, doc_id: str, user_id: Optional[str] = None) -> Optional[DocumentRecord]:
+        doc = self._docs.get(doc_id)
+        if doc and user_id and doc.user_id and doc.user_id != user_id:
+            return None
+        return doc
 
     # ─── STAGE 1: INGESTION (Fast Text + VLM OCR for Scanned/Images) ─────
     async def ingest_document(
@@ -318,11 +321,12 @@ class DocumentProcessor:
         """
         doc = self._docs.get(doc_id)
         if doc and doc.chunks:
-            text_pieces = [c.content for c in doc.chunks if c.source_type == "text"]
-            if not text_pieces:
-                text_pieces = [c.content for c in doc.chunks]
-            full = "\n\n".join(text_pieces)
-            return full[:max_chars]
+            if not user_id or not doc.user_id or doc.user_id == user_id:
+                text_pieces = [c.content for c in doc.chunks if c.source_type == "text"]
+                if not text_pieces:
+                    text_pieces = [c.content for c in doc.chunks]
+                full = "\n\n".join(text_pieces)
+                return full[:max_chars]
 
         # Fallback to PostgreSQL
         return pgvector_store.get_document_text(doc_id=doc_id, max_chars=max_chars, user_id=user_id)
@@ -610,6 +614,9 @@ class DocumentProcessor:
           - debug_metadata
         """
         doc = self._docs.get(doc_id)
+        if user_id and doc and doc.user_id and doc.user_id != user_id:
+            # Multi-tenant protection: do not leak in-memory doc across different users
+            doc = None
         target_sid = session_id or doc_id or (getattr(doc, "session_id", None) if doc else None)
         active_user_id = user_id or (getattr(doc, "user_id", None) if doc else None)
 
@@ -668,16 +675,17 @@ class DocumentProcessor:
 
         # 3. In-memory chunks if present
         if doc and doc.chunks:
-            for c in doc.chunks:
-                if c.chunk_id not in candidate_map:
-                    candidate_map[c.chunk_id] = {
-                        "chunk_id": c.chunk_id,
-                        "doc_id": c.doc_id,
-                        "page": c.page,
-                        "source_type": c.source_type,
-                        "content": c.content,
-                        "rank": 20.0,
-                    }
+            if not active_user_id or not doc.user_id or doc.user_id == active_user_id:
+                for c in doc.chunks:
+                    if c.chunk_id not in candidate_map:
+                        candidate_map[c.chunk_id] = {
+                            "chunk_id": c.chunk_id,
+                            "doc_id": c.doc_id,
+                            "page": c.page,
+                            "source_type": c.source_type,
+                            "content": c.content,
+                            "rank": 20.0,
+                        }
 
         # 4. Neural / Cross-scoring Reranker pass
         raw_candidates = list(candidate_map.values())

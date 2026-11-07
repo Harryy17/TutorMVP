@@ -3,11 +3,14 @@ import { motion } from 'framer-motion'
 import { Link, useNavigate } from 'react-router-dom'
 import {
   Sparkles, ArrowRight, Brain, Layers, ShieldCheck, CheckCircle2,
-  FileCheck, Cpu, Database, Eye, BookOpen, Compass, Award, MessageSquareQuote
+  FileCheck, Cpu, Database, Eye, BookOpen, Compass, Award, MessageSquareQuote, LogOut
 } from 'lucide-react'
+import { useAuthStore } from '../stores/authStore'
 
 export default function MethodologyPage() {
   const navigate = useNavigate()
+  const user = useAuthStore((s) => s.user)
+  const logout = useAuthStore((s) => s.logout)
 
   return (
     <div className="min-h-screen bg-[#FAF9F5] text-stone-900 font-sans selection:bg-stone-200">
@@ -41,13 +44,33 @@ export default function MethodologyPage() {
           </nav>
 
           <div className="flex items-center gap-3">
-            <button
-              onClick={() => navigate('/study')}
-              className="flex items-center gap-1.5 rounded-full bg-stone-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
-            >
-              <span>Launch Studio</span>
-              <ArrowRight size={13} />
-            </button>
+            {user ? (
+              <>
+                <button
+                  onClick={() => navigate('/study')}
+                  className="flex items-center gap-1.5 rounded-full bg-stone-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition cursor-pointer"
+                >
+                  <span>Launch Studio</span>
+                  <ArrowRight size={13} />
+                </button>
+                <button
+                  type="button"
+                  onClick={logout}
+                  title="Sign Out"
+                  className="rounded-full border border-stone-200 bg-white p-2 text-stone-500 hover:text-red-600 hover:border-red-200 transition cursor-pointer"
+                >
+                  <LogOut size={14} />
+                </button>
+              </>
+            ) : (
+              <Link
+                to="/login"
+                className="flex items-center gap-1.5 rounded-full bg-stone-900 px-5 py-2 text-xs font-semibold text-white shadow-xs hover:bg-stone-800 transition"
+              >
+                <span>Sign In</span>
+                <ArrowRight size={13} />
+              </Link>
+            )}
           </div>
         </div>
       </header>

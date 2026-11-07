@@ -169,6 +169,20 @@ export const streamTeacherLesson = async ({
     const headers: Record<string, string> = { Accept: 'text/event-stream' }
     if (token) headers.Authorization = `Bearer ${token}`
 
+    try {
+      const authStorage = localStorage.getItem('deep-tutor-auth')
+      if (authStorage) {
+        const parsed = JSON.parse(authStorage)
+        const state = parsed.state
+        if (state?.token && !headers.Authorization) {
+          headers.Authorization = `Bearer ${state.token}`
+        }
+        if (state?.user?.id) {
+          headers['X-User-Id'] = state.user.id
+        }
+      }
+    } catch {}
+
     const res = await fetch(url, { headers, signal })
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`)
     if (!res.body) throw new Error('ReadableStream not supported')

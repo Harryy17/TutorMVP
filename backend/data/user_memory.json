@@ -68,5 +68,18 @@
     "weaknesses": [],
     "facts": [],
     "last_active": "2026-11-06T12:55:53.392842"
+  },
+  "937af7f3-fe39-493a-bcb8-35acfcf7fd28": {
+    "user_id": "937af7f3-fe39-493a-bcb8-35acfcf7fd28",
+    "name": "Student",
+    "learning_style": "Step-by-step with clear examples",
+    "active_goals": [
+      "Master academic coursework",
+      "Build strong conceptual foundations"
+    ],
+    "studied_topics": [],
+    "weaknesses": [],
+    "facts": [],
+    "last_active": "2026-11-07T08:03:59.482556"
   }
 }
