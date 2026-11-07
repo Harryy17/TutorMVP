@@ -10,6 +10,7 @@ import os
 import re
 import json
 import asyncio
+import sqlite3
 from pathlib import Path
 from typing import List, Dict, Any, Optional, Tuple
 from dotenv import dotenv_values
@@ -50,6 +51,77 @@ class PgVectorStore:
         # In-memory transient cache if database connection is pending configuration
         self._mem_sessions: Dict[str, Dict[str, Any]] = {}
         self._mem_chunks: Dict[str, List[Dict[str, Any]]] = {}
+        self._init_sqlite_schema()
+
+    def _get_sqlite_connection(self):
+        db_path = Path(__file__).resolve().parent.parent.parent / "data" / "study_store.db"
+        db_path.parent.mkdir(parents=True, exist_ok=True)
+        conn = sqlite3.connect(str(db_path), check_same_thread=False)
+        conn.row_factory = sqlite3.Row
+        return conn
+
+    def _init_sqlite_schema(self):
+        try:
+            with self._get_sqlite_connection() as conn:
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS study_sessions (
+                        session_id TEXT PRIMARY KEY,
+                        user_id TEXT NOT NULL DEFAULT 'default_user',
+                        subject TEXT,
+                        title TEXT,
+                        file_name TEXT,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                        metadata TEXT DEFAULT '{}'
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_sq_sessions_user ON study_sessions(user_id);")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS session_topics (
+                        id TEXT,
+                        session_id TEXT,
+                        title TEXT,
+                        summary TEXT,
+                        difficulty TEXT,
+                        key_concepts TEXT DEFAULT '[]',
+                        estimated_study_time TEXT,
+                        PRIMARY KEY (session_id, id)
+                    );
+                """)
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS session_messages (
+                        id TEXT PRIMARY KEY,
+                        session_id TEXT,
+                        role TEXT,
+                        text TEXT,
+                        thought_process TEXT,
+                        quiz_data TEXT,
+                        topics TEXT,
+                        attachment TEXT,
+                        is_explanation INTEGER DEFAULT 1,
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_sq_messages_session ON session_messages(session_id);")
+                conn.execute("""
+                    CREATE TABLE IF NOT EXISTS document_chunks (
+                        chunk_id TEXT PRIMARY KEY,
+                        session_id TEXT,
+                        user_id TEXT NOT NULL DEFAULT 'default_user',
+                        doc_id TEXT,
+                        page_number INTEGER,
+                        chunk_index INTEGER,
+                        source_type TEXT,
+                        content TEXT,
+                        metadata TEXT DEFAULT '{}',
+                        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+                    );
+                """)
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_sq_chunks_session ON document_chunks(session_id);")
+                conn.execute("CREATE INDEX IF NOT EXISTS idx_sq_chunks_user ON document_chunks(user_id);")
+                conn.commit()
+        except Exception as e:
+            print(f"[SQLiteFallback] Schema init notice: {e}")
 
     @property
     def db_url(self) -> str:
@@ -233,6 +305,22 @@ class PgVectorStore:
             self._mem_chunks[target_sid].append(c)
 
         if not self.is_configured():
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    for i, c in enumerate(chunks):
+                        cid = c.get("chunk_id") or f"{target_doc}_p{c.get('page', 1)}_{i}"
+                        page = c.get("page", 1)
+                        idx = c.get("chunk_index", i)
+                        stype = c.get("source_type", "text")
+                        content = c.get("content") or c.get("text", "")
+                        meta = json.dumps(c.get("metadata", {}))
+                        sconn.execute("""
+                            INSERT OR REPLACE INTO document_chunks (chunk_id, session_id, user_id, doc_id, page_number, chunk_index, source_type, content, metadata)
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                        """, (cid, target_sid, user_id, target_doc, page, idx, stype, content, meta))
+                    sconn.commit()
+            except Exception as e:
+                print(f"[SQLiteFallback] index_chunks notice: {e}")
             return len(chunks)
 
         conn = None
@@ -387,13 +475,31 @@ class PgVectorStore:
                 conn.close()
 
     def _mem_text_search(self, query: str, session_id: Optional[str], limit: int, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        if session_id:
-            chunks = list(self._mem_chunks.get(session_id, []))
-        else:
-            chunks = [c for c_list in self._mem_chunks.values() for c in c_list]
+        chunks = []
+        try:
+            with self._get_sqlite_connection() as sconn:
+                cur = sconn.cursor()
+                clauses = []
+                params = []
+                if session_id:
+                    clauses.append("(session_id = ? OR doc_id = ?)")
+                    params.extend([session_id, session_id])
+                if user_id:
+                    clauses.append("user_id = ?")
+                    params.append(user_id)
+                where_clause = " WHERE " + " AND ".join(clauses) if clauses else ""
+                cur.execute(f"SELECT * FROM document_chunks{where_clause}", params)
+                chunks = [dict(r) for r in cur.fetchall()]
+        except Exception:
+            pass
 
-        if user_id:
-            chunks = [c for c in chunks if c.get("user_id") == user_id]
+        if not chunks:
+            if session_id:
+                chunks = list(self._mem_chunks.get(session_id, []))
+            else:
+                chunks = [c for c_list in self._mem_chunks.values() for c in c_list]
+            if user_id:
+                chunks = [c for c in chunks if c.get("user_id") == user_id]
 
         q_words = set(re.findall(r"\w+", query.lower()))
         scored = []
@@ -407,10 +513,10 @@ class PgVectorStore:
                 "chunk_id": c.get("chunk_id", ""),
                 "session_id": c.get("session_id", ""),
                 "doc_id": c.get("doc_id", ""),
-                "page": c.get("page", 1),
+                "page": c.get("page_number", c.get("page", 1)),
                 "source_type": c.get("source_type", "text"),
                 "content": c.get("content", ""),
-                "metadata": c.get("metadata", {}),
+                "metadata": json.loads(c["metadata"]) if isinstance(c.get("metadata"), str) else c.get("metadata", {}),
                 "rank": float(s),
             }
             for s, c in scored[:limit]
@@ -577,6 +683,26 @@ class PgVectorStore:
         """Retrieves aggregated document text across all chunks."""
         target_sid = session_id or doc_id
         if not self.is_configured():
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    cur = sconn.cursor()
+                    if user_id:
+                        cur.execute("""
+                            SELECT content FROM document_chunks
+                            WHERE (session_id = ? OR doc_id = ?) AND user_id = ?
+                            ORDER BY page_number ASC, chunk_index ASC LIMIT 40
+                        """, (target_sid, doc_id, user_id))
+                    else:
+                        cur.execute("""
+                            SELECT content FROM document_chunks
+                            WHERE (session_id = ? OR doc_id = ?)
+                            ORDER BY page_number ASC, chunk_index ASC LIMIT 40
+                        """, (target_sid, doc_id))
+                    rows = cur.fetchall()
+                    if rows:
+                        return "\n\n".join(r["content"] for r in rows if r["content"])[:max_chars]
+            except Exception as e:
+                print(f"[SQLiteFallback] get_document_text notice: {e}")
             chunks = self._mem_chunks.get(target_sid, [])
             return "\n\n".join(c.get("content", "") for c in chunks)[:max_chars]
 
@@ -622,6 +748,20 @@ class PgVectorStore:
                     "topics": [],
                     "messages": [],
                 }
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    sconn.execute("""
+                        INSERT INTO study_sessions (session_id, user_id, subject, title, updated_at)
+                        VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT(session_id) DO UPDATE SET
+                            user_id = COALESCE(excluded.user_id, study_sessions.user_id),
+                            subject = COALESCE(excluded.subject, study_sessions.subject),
+                            title = COALESCE(excluded.title, study_sessions.title),
+                            updated_at = CURRENT_TIMESTAMP;
+                    """, (session_id, user_id, subject, title or subject))
+                    sconn.commit()
+            except Exception as e:
+                print(f"[SQLiteFallback] ensure_session notice: {e}")
             return
 
         conn = None
@@ -681,6 +821,51 @@ class PgVectorStore:
             mem["messages"] = messages
 
         if not self.is_configured():
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    sconn.execute("""
+                        INSERT INTO study_sessions (session_id, user_id, subject, title, file_name, metadata, updated_at)
+                        VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                        ON CONFLICT (session_id) DO UPDATE SET
+                            user_id = COALESCE(excluded.user_id, study_sessions.user_id),
+                            subject = COALESCE(excluded.subject, study_sessions.subject),
+                            title = COALESCE(excluded.title, study_sessions.title),
+                            file_name = COALESCE(excluded.file_name, study_sessions.file_name),
+                            metadata = COALESCE(excluded.metadata, study_sessions.metadata),
+                            updated_at = CURRENT_TIMESTAMP;
+                    """, (session_id, user_id or "default_user", subject or "General", title or subject or "General", file_name, json.dumps(metadata or {})))
+
+                    if topics is not None:
+                        sconn.execute("DELETE FROM session_topics WHERE session_id = ?", (session_id,))
+                        for t in topics:
+                            sconn.execute("""
+                                INSERT OR REPLACE INTO session_topics (id, session_id, title, summary, difficulty, key_concepts, estimated_study_time)
+                                VALUES (?, ?, ?, ?, ?, ?, ?)
+                            """, (
+                                t.get("id"), session_id, t.get("title"), t.get("summary"),
+                                t.get("difficulty"), json.dumps(t.get("key_concepts", [])),
+                                t.get("estimated_study_time")
+                            ))
+
+                    if messages is not None:
+                        sconn.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
+                        for m in messages:
+                            qd = m.get("quizData")
+                            tp = m.get("topics")
+                            att = m.get("attachment")
+                            sconn.execute("""
+                                INSERT OR REPLACE INTO session_messages (id, session_id, role, text, thought_process, quiz_data, topics, attachment, is_explanation, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                            """, (
+                                m.get("id"), session_id, m.get("role"), m.get("text"), m.get("thoughtProcess"),
+                                json.dumps(qd) if (isinstance(qd, dict) or isinstance(qd, list)) else (qd if isinstance(qd, str) else None),
+                                json.dumps(tp) if isinstance(tp, list) else None,
+                                json.dumps(att) if (isinstance(att, dict) or isinstance(att, list)) else None,
+                                1 if m.get("isExplanation", True) else 0,
+                            ))
+                    sconn.commit()
+            except Exception as e:
+                print(f"[SQLiteFallback] save_session_state notice: {e}")
             return
 
         conn = None
@@ -758,8 +943,61 @@ class PgVectorStore:
                 conn.close()
 
     def get_session_state(self, session_id: str, user_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
-        """Retrieves session metadata, topics, and messages from PostgreSQL."""
+        """Retrieves session metadata, topics, and messages from PostgreSQL or SQLite."""
         if not self.is_configured():
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    cur = sconn.cursor()
+                    if user_id:
+                        cur.execute("SELECT * FROM study_sessions WHERE session_id = ? AND user_id = ?", (session_id, user_id))
+                    else:
+                        cur.execute("SELECT * FROM study_sessions WHERE session_id = ?", (session_id,))
+                    sess_row = cur.fetchone()
+                    if sess_row:
+                        cur.execute("SELECT * FROM session_topics WHERE session_id = ? ORDER BY id ASC", (session_id,))
+                        topics = []
+                        for r in cur.fetchall():
+                            kc = r["key_concepts"]
+                            topics.append({
+                                "id": r["id"],
+                                "title": r["title"],
+                                "summary": r["summary"],
+                                "difficulty": r["difficulty"],
+                                "key_concepts": json.loads(kc) if kc else [],
+                                "estimated_study_time": r["estimated_study_time"],
+                            })
+
+                        cur.execute("SELECT * FROM session_messages WHERE session_id = ? ORDER BY rowid ASC", (session_id,))
+                        messages = []
+                        for m in cur.fetchall():
+                            qd = m["quiz_data"]
+                            tp = m["topics"]
+                            att = m["attachment"]
+                            messages.append({
+                                "id": m["id"],
+                                "role": m["role"],
+                                "text": m["text"],
+                                "thoughtProcess": m["thought_process"],
+                                "quizData": json.loads(qd) if qd else None,
+                                "topics": json.loads(tp) if tp else None,
+                                "attachment": json.loads(att) if att else None,
+                                "isExplanation": bool(m["is_explanation"]),
+                            })
+
+                        return {
+                            "meta": {
+                                "id": sess_row["session_id"],
+                                "user_id": sess_row["user_id"],
+                                "subject": sess_row["subject"],
+                                "title": sess_row["title"],
+                                "file_name": sess_row["file_name"],
+                            },
+                            "topics": topics,
+                            "messages": messages,
+                        }
+            except Exception as e:
+                print(f"[SQLiteFallback] get_session_state notice: {e}")
+
             mem = self._mem_sessions.get(session_id)
             if mem and user_id and mem.get("meta", {}).get("user_id") and mem.get("meta", {}).get("user_id") != user_id:
                 return None
@@ -854,8 +1092,30 @@ class PgVectorStore:
                 conn.close()
 
     def get_all_sessions(self, user_id: Optional[str] = None) -> List[Dict[str, Any]]:
-        """Lists all study sessions stored in PostgreSQL, partitioned by user_id."""
+        """Lists all study sessions stored in PostgreSQL or SQLite, partitioned by user_id."""
         if not self.is_configured():
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    cur = sconn.cursor()
+                    if user_id:
+                        cur.execute("""
+                            SELECT session_id AS id, user_id, subject, title, file_name, created_at, updated_at
+                            FROM study_sessions
+                            WHERE user_id = ?
+                            ORDER BY updated_at DESC;
+                        """, (user_id,))
+                    else:
+                        cur.execute("""
+                            SELECT session_id AS id, user_id, subject, title, file_name, created_at, updated_at
+                            FROM study_sessions
+                            ORDER BY updated_at DESC;
+                        """)
+                    rows = cur.fetchall()
+                    if rows:
+                        return [dict(r) for r in rows]
+            except Exception as e:
+                print(f"[SQLiteFallback] get_all_sessions notice: {e}")
+
             if user_id:
                 return [v.get("meta", {}) for v in self._mem_sessions.values() if v.get("meta", {}).get("user_id") == user_id]
             return [v.get("meta", {}) for v in self._mem_sessions.values()]
@@ -894,6 +1154,22 @@ class PgVectorStore:
         self._mem_chunks.pop(session_id, None)
 
         if not self.is_configured():
+            try:
+                with self._get_sqlite_connection() as sconn:
+                    cur = sconn.cursor()
+                    if user_id:
+                        cur.execute("DELETE FROM document_chunks WHERE session_id = ? AND user_id = ?", (session_id, user_id))
+                        cur.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
+                        cur.execute("DELETE FROM session_topics WHERE session_id = ?", (session_id,))
+                        cur.execute("DELETE FROM study_sessions WHERE session_id = ? AND user_id = ?", (session_id, user_id))
+                    else:
+                        cur.execute("DELETE FROM document_chunks WHERE session_id = ?", (session_id,))
+                        cur.execute("DELETE FROM session_messages WHERE session_id = ?", (session_id,))
+                        cur.execute("DELETE FROM session_topics WHERE session_id = ?", (session_id,))
+                        cur.execute("DELETE FROM study_sessions WHERE session_id = ?", (session_id,))
+                    sconn.commit()
+            except Exception as e:
+                print(f"[SQLiteFallback] clear_session notice: {e}")
             return True
 
         conn = None
