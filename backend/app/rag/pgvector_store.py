@@ -99,9 +99,14 @@ class PgVectorStore:
                         topics TEXT,
                         attachment TEXT,
                         is_explanation INTEGER DEFAULT 1,
+                        visual_spec TEXT,
                         created_at TEXT DEFAULT CURRENT_TIMESTAMP
                     );
                 """)
+                try:
+                    conn.execute("ALTER TABLE session_messages ADD COLUMN visual_spec TEXT;")
+                except Exception:
+                    pass
                 conn.execute("CREATE INDEX IF NOT EXISTS idx_sq_messages_session ON session_messages(session_id);")
                 conn.execute("""
                     CREATE TABLE IF NOT EXISTS document_chunks (
@@ -853,15 +858,18 @@ class PgVectorStore:
                             qd = m.get("quizData")
                             tp = m.get("topics")
                             att = m.get("attachment")
+                            vspec = m.get("visualSpec") or m.get("visual_spec")
+                            vspec_str = json.dumps(vspec) if (isinstance(vspec, dict) or isinstance(vspec, list)) else (vspec if isinstance(vspec, str) else None)
                             sconn.execute("""
-                                INSERT OR REPLACE INTO session_messages (id, session_id, role, text, thought_process, quiz_data, topics, attachment, is_explanation, created_at)
-                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+                                INSERT OR REPLACE INTO session_messages (id, session_id, role, text, thought_process, quiz_data, topics, attachment, is_explanation, visual_spec, created_at)
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
                             """, (
                                 m.get("id"), session_id, m.get("role"), m.get("text"), m.get("thoughtProcess"),
                                 json.dumps(qd) if (isinstance(qd, dict) or isinstance(qd, list)) else (qd if isinstance(qd, str) else None),
                                 json.dumps(tp) if isinstance(tp, list) else None,
                                 json.dumps(att) if (isinstance(att, dict) or isinstance(att, list)) else None,
                                 1 if m.get("isExplanation", True) else 0,
+                                vspec_str,
                             ))
                     sconn.commit()
             except Exception as e:
@@ -973,6 +981,7 @@ class PgVectorStore:
                             qd = m["quiz_data"]
                             tp = m["topics"]
                             att = m["attachment"]
+                            vspec = m["visual_spec"] if "visual_spec" in m.keys() else None
                             messages.append({
                                 "id": m["id"],
                                 "role": m["role"],
@@ -982,6 +991,7 @@ class PgVectorStore:
                                 "topics": json.loads(tp) if tp else None,
                                 "attachment": json.loads(att) if att else None,
                                 "isExplanation": bool(m["is_explanation"]),
+                                "visualSpec": json.loads(vspec) if vspec else None,
                             })
 
                         return {

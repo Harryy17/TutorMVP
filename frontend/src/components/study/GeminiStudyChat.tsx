@@ -23,6 +23,8 @@ import { studyApi } from '../../services/api'
 import { useAuthStore } from '../../stores/authStore'
 import { cleanAcademicText } from '../../utils/textFormatter'
 import { exportNotesToPdf } from '../../utils/exportPdf'
+import { VisualExplanationCard } from '../visual/VisualExplanationCard'
+import type { VisualSpecification } from '../../types/visual'
 
 
 export interface QuizData {
@@ -49,6 +51,7 @@ export interface Message {
   quickSuggestions?: string[]
   response_format?: string
   export_ready?: boolean
+  visualSpec?: VisualSpecification
 }
 
 
@@ -359,6 +362,7 @@ export default function GeminiStudyChat({
         quizData: decision.quiz_data || undefined,
         response_format: decision.response_format,
         export_ready: Boolean(decision.export_ready),
+        visualSpec: decision.visual_spec || undefined,
       }
 
       const allMsgs = [...updatedMsgs, botMsg]
@@ -1122,6 +1126,10 @@ export default function GeminiStudyChat({
                   )
                 )}
 
+                {/* Dynamic Visual Explanation Engine Figure */}
+                {m.visualSpec && (
+                  <VisualExplanationCard spec={m.visualSpec} />
+                )}
 
                 {/* Interactive Quiz Card */}
                 {m.quizData && (

@@ -31,6 +31,7 @@ from typing import Dict, Any, List, Optional
 from app.rag.ollama_client import ollama
 from app.rag.user_memory import user_memory_store
 from app.rag.image_gen_client import image_client
+from app.rag.visual_engine import visual_engine
 
 
 class DecisionAgent:
@@ -289,6 +290,26 @@ Respond with ONLY this JSON object:
         ):
             result = await self._maybe_reground(result, context, message, query_analysis, generated_image_info)
 
+        # Dynamic Visual Explanation Pipeline
+        if result.get("is_explanation") and visual_engine.should_generate_visual(
+            message=message,
+            query_analysis=query_analysis,
+            reply_text=result.get("reply", ""),
+            response_format=result.get("response_format"),
+        ):
+            try:
+                spec = await visual_engine.generate_visual_spec(
+                    query=message,
+                    reply_text=result.get("reply", ""),
+                    context=context,
+                    subject=current_subject,
+                    query_analysis=query_analysis,
+                )
+                if spec:
+                    result["visual_spec"] = spec.model_dump()
+            except Exception as vis_err:
+                print(f"[DecisionAgent] Dynamic visual spec notice: {vis_err}")
+
         return result
 
     # ------------------------------------------------------------------
@@ -532,6 +553,7 @@ Respond with ONLY this JSON object:
             "groundedness_note": data.get("groundedness_note"),
             "response_format": result_format,
             "export_ready": export_ready,
+            "visual_spec": data.get("visual_spec"),
         }
 
     # ------------------------------------------------------------------
@@ -648,6 +670,12 @@ Respond with ONLY this JSON object:
             clean_ctx = re.sub(r"\s+", " ", clean_ctx).strip()
             sentences = [s.strip() for s in re.split(r"\. |\.\n", clean_ctx) if len(s.strip()) > 15][:3]
             summary_text = ". ".join(sentences) + "." if sentences else clean_ctx[:300]
+            fallback_spec = None
+            if visual_engine.should_generate_visual(message, query_analysis, summary_text):
+                vtype = visual_engine.select_visual_type(message, query_analysis, summary_text)
+                fallback_obj = visual_engine._build_deterministic_fallback(message, summary_text, vtype)
+                if fallback_obj:
+                    fallback_spec = fallback_obj.model_dump()
             return {
                 "thought_process": "LLM unavailable; extracted foundational definition directly from retrieved material.",
                 "intent": "QUESTION",
@@ -656,6 +684,7 @@ Respond with ONLY this JSON object:
                 "quiz_data": None,
                 "reply": f"{summary_text}\n\n**Key Takeaway:** Focus on how this principle applies to your problem solving.\n\n**Quick check:** Would you like a practice quiz question on this topic?",
                 "groundedness_note": "Directly extracted from retrieved context; not LLM-synthesized.",
+                "visual_spec": fallback_spec,
             }
 
         is_question = any(q in lower for q in [
