@@ -242,6 +242,10 @@ export default function GeminiStudyChat({
 
     if (activeSessionId !== sessionId) {
       setSessionId(activeSessionId)
+      // Reset current messages so the new session starts completely isolated
+      setMessages([])
+      setExtractedTopics([])
+      setSubject('')
       studyApi.getSessionState(activeSessionId).then((res) => {
         if (res.data) {
           const { meta, messages: savedMsgs, topics: savedTopics } = res.data
@@ -320,12 +324,13 @@ export default function GeminiStudyChat({
     if (step === 'ask_subject') setStep('conversing')
 
     try {
+      const currentAuthUser = useAuthStore.getState().user
       const res = await studyApi.agentMessage({
         message: text,
         current_subject: subject || undefined,
         session_id: activeSid || undefined,
-        user_id: userName.toLowerCase().replace(/\s+/g, '_') || 'default_user',
-        user_name: userName,
+        user_id: currentAuthUser?.id || 'default_user',
+        user_name: currentAuthUser?.username || userName,
         difficulty: options?.difficulty || 'standard',
         history: messages.map((m) => {
           let content = m.text
@@ -404,8 +409,9 @@ export default function GeminiStudyChat({
       prev.map((m) => (m.id === msgId ? { ...m, feedbackGiven: 'good' } : m))
     )
     try {
+      const currentAuthUser = useAuthStore.getState().user
       await studyApi.sendFeedback({
-        user_id: userName.toLowerCase().replace(/\s+/g, '_') || 'default_user',
+        user_id: currentAuthUser?.id || 'default_user',
         action: 'confirm_good',
         concept: subject,
         subject,
@@ -420,8 +426,9 @@ export default function GeminiStudyChat({
       prev.map((m) => (m.id === msgId ? { ...m, feedbackGiven: 'easier' } : m))
     )
     try {
+      const currentAuthUser = useAuthStore.getState().user
       studyApi.sendFeedback({
-        user_id: userName.toLowerCase().replace(/\s+/g, '_') || 'default_user',
+        user_id: currentAuthUser?.id || 'default_user',
         action: 'make_easier',
         concept: subject,
         subject,
