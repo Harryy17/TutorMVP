@@ -161,21 +161,30 @@ class DocumentProcessor:
         # 3. PDF documents (digital or scanned)
         if ext == ".pdf":
             try:
-                reader = pypdf.PdfReader(file_path)
-                total_pages = len(reader.pages)
+                import fitz  # PyMuPDF
+                pdf_doc = fitz.open(file_path)
+                total_pages = len(pdf_doc)
                 text_chunks: List[DocumentChunk] = []
                 scanned_pages_to_vlm: List[int] = []
 
-                # Digital text pass: extract and index all digital text pages immediately (<1.5s total)
+                # Dual-engine digital text pass: PyMuPDF + pypdf fallback
+                # Evaluates every page individually in milliseconds.
                 for page_idx in range(total_pages):
                     page_num = page_idx + 1
-                    try:
-                        page_text = reader.pages[page_idx].extract_text() or ""
-                    except Exception:
-                        page_text = ""
+                    page = pdf_doc[page_idx]
+                    page_text = page.get_text() or ""
 
-                    # If page text is rich enough, chunk it directly
-                    if len(page_text.strip()) >= 40:
+                    # Fallback to pypdf if PyMuPDF returned little text
+                    if len(page_text.strip()) < 30:
+                        try:
+                            reader = pypdf.PdfReader(file_path)
+                            if page_idx < len(reader.pages):
+                                page_text = reader.pages[page_idx].extract_text() or ""
+                        except Exception:
+                            pass
+
+                    # If page has digital text, index it immediately (0ms, NO VLM NEEDED!)
+                    if len(page_text.strip()) >= 30:
                         chunks = self._chunk_text(
                             page_text,
                             doc_id=doc_id,
@@ -184,10 +193,11 @@ class DocumentProcessor:
                         )
                         text_chunks.extend(chunks)
                     else:
-                        # Page has no or negligible text -> Scanned page!
-                        scanned_pages_to_vlm.append(page_idx)
-
-
+                        # Check if the page actually has image or drawing content to OCR
+                        # (Skip completely blank or empty trailing pages)
+                        has_visuals = bool(len(page.get_images()) > 0 or len(page.get_drawings()) > 0)
+                        if has_visuals:
+                            scanned_pages_to_vlm.append(page_idx)
 
                 # If scanned pages exist, use gpt 6.0 sol VLM to extract text from images in PARALLEL batches
                 if scanned_pages_to_vlm:
