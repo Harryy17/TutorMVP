@@ -22,3 +22,4 @@ output "connect_command" {
   description = "Command to connect kubectl to this AKS cluster"
   value       = "az aks get-credentials --resource-group ${azurerm_resource_group.rg.name} --name ${azurerm_kubernetes_cluster.aks.name} --overwrite-existing"
 }
+
