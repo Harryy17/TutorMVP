@@ -8,6 +8,11 @@ output "backend_url" {
   value       = "https://${azurerm_linux_web_app.backend.default_hostname}"
 }
 
+output "backend_app_name" {
+  description = "Linux Web App name used for application deployment"
+  value       = azurerm_linux_web_app.backend.name
+}
+
 output "backend_health_check" {
   description = "FastAPI health check endpoint"
   value       = "https://${azurerm_linux_web_app.backend.default_hostname}/api/health"

@@ -23,6 +23,11 @@ resource "random_string" "suffix" {
   upper   = false
 }
 
+resource "random_password" "secret_key" {
+  length  = 48
+  special = false
+}
+
 locals {
   resource_prefix = "${var.app_name}-${var.environment}-${random_string.suffix.result}"
 }
@@ -66,19 +71,20 @@ resource "azurerm_linux_web_app" "backend" {
       python_version = "3.11"
     }
 
-    # Azure Linux startup command for FastAPI
-    app_command_line = "cd backend && uvicorn app.main:app --host 0.0.0.0 --port 8000"
+    # Deploy the contents of backend/ as the App Service package root.
+    app_command_line = "gunicorn --bind=0.0.0.0:8000 --workers=2 --worker-class=uvicorn.workers.UvicornWorker app.main:app"
 
     cors {
-      allowed_origins     = ["*"]
+      allowed_origins     = ["https://${azurerm_static_web_app.frontend.default_host_name}"]
       support_credentials = false
     }
   }
 
   app_settings = {
     "SCM_DO_BUILD_DURING_DEPLOYMENT" = "true"
-    "PORT"                           = "8000"
-    "SECRET_KEY"                     = var.secret_key
+    "WEBSITES_PORT"                  = "8000"
+    "DEBUG"                          = "false"
+    "SECRET_KEY"                     = var.secret_key != "" ? var.secret_key : random_password.secret_key.result
     "POSTGRES_URL"                   = var.postgres_url
     "SUPABASE_URL"                   = var.supabase_url
     "SUPABASE_KEY"                   = var.supabase_key
@@ -109,11 +115,4 @@ resource "azurerm_static_web_app" "frontend" {
   }
 }
 
-# Configure Frontend API Base URL in Static Web App Application Settings
-resource "azurerm_static_web_app_app_settings" "frontend_settings" {
-  static_web_app_id = azurerm_static_web_app.frontend.id
-  app_settings = {
-    "VITE_API_BASE_URL" = "https://${azurerm_linux_web_app.backend.default_hostname}/api"
-  }
-}
 

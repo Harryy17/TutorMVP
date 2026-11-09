@@ -72,6 +72,10 @@ variable "secret_key" {
   description = "Application secret key for JWT & session security"
   type        = string
   sensitive   = true
-  default     = "indie-tutor-study-room-secret-key-2026"
+  default     = ""
+  validation {
+    condition     = var.secret_key == "" || length(var.secret_key) >= 32
+    error_message = "secret_key must be at least 32 characters when set; leave it empty to generate a random key."
+  }
 }
 
