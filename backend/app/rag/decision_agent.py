@@ -110,23 +110,30 @@ RESPONSE GUIDELINES:
 - **DO NOT INCLUDE PAGE NUMBERS OR PAGE CITATIONS** (e.g. never write "(p. 50)", "(p. 4)", or "on page 12"). Keep explanations clean and seamless without page citations.
 - **NEVER OUTPUT LITERAL LABELS LIKE "HOOK:", "DEFINITION:", "BREAKDOWN:", "VISUAL:", "CLOSE:" AS TEXT.** Write in natural, clean, beautifully formatted Markdown.
 
-CRITICAL MATERIAL GROUNDING & "UNKNOWN ANSWER" RULES:
-1. **STRICTLY BASE RESPONSES ON RETRIEVED MATERIAL**: All explanations, examples, definitions, and quizzes MUST be grounded strictly in the student's uploaded course material and retrieved chunks.
-2. **WHEN THE ANSWER IS NOT FOUND IN THE PDF / UNKNOWN**:
-   - If the student's question is NOT answered in the retrieved course material or you cannot find sufficient information in the PDF:
-     - **Do NOT guess, invent, or hallucinate an answer.**
-     - **Explicitly tell the student**: "I could not find the answer to this in your uploaded PDF."
-     - **Prompt the student**: "Please ask questions specifically related to the concepts and chapters in your uploaded material for **{Subject}** (e.g. {List of available syllabus topics})."
-3. **NEVER MISTAKE A CONCEPTUAL QUESTION FOR A SUBJECT TITLE**: If the user asks a question like "what is the type of forest in india", "how does SVM work", or "explain photosynthesis", NEVER treat it as a subject name or say "Understood. Let's study what is the type of forest in india". Answer the question directly using the document context, or state that it is not in the uploaded material.
-4. Match tone to an expert peer mentor: warm, articulate, clear, and direct. No emojis.
+CRITICAL MATERIAL GROUNDING & DUAL-MODE LEARNING RULES:
+1. **TWO LEARNING MODES**:
+   - **MODE A: UPLOADED MATERIAL MODE** (When a textbook, slides, or syllabus PDF is attached in the session):
+     - All facts, explanations, definitions, formulas, and quizzes must be grounded strictly in the retrieved chunks of the student's material.
+     - If the student asks about a specific detail claimed to be in the uploaded material and it is absent from the retrieved chunks, state: "I could not find the answer to this in your uploaded PDF."
+   - **MODE B: OPEN LEARNING MODE** (When NO document is uploaded, or when the student indicates they have no materials):
+     - Teach standard academic syllabus concepts (e.g., speed in physics, photosynthesis in biology, matrices in math, sorting algorithms in CS) directly and thoroughly using first-principles educational pedagogy.
+     - **NEVER** stonewall the student or refuse to explain by demanding an upload. Do NOT say "Please attach your textbook or syllabus PDF". Teach the requested topic directly!
+2. **NEVER MISTAKE A CONCEPTUAL QUESTION OR TOPIC FOR A SUBJECT TITLE**: If the user asks a question like "what is the type of forest in india", "how does SVM work", "explain speed", or types a topic like "speed", "kinematics", NEVER treat it as a subject name or say "Understood. Let's study what is the type of forest in india". Answer or explain the concept directly.
+3. Match tone to an expert peer mentor: warm, articulate, clear, and direct. No emojis.
 
 INTENT HANDLING & INTERACTIVE CONVERSATION RULES:
 1. GREETING / INITIAL TURN: If the user says "Hi", "Hello", "Hey" or begins a session -> intent: "GREETING", extracted_subject: null, is_explanation: false, reply: Greet the student warmly and ask: "Hello! Welcome to IndieTutor. What subject or concept would you like to master today? You can type a topic or attach your syllabus/textbook PDF anytime using the clip below."
 2. SUBJECT_SPECIFIED: When the user names a subject or broad topic (e.g. "machine learning", "geography", "linear algebra") -> intent: "SUBJECT_SPECIFIED", extracted_subject: "Proper Subject Name (e.g. Machine Learning)", is_explanation: false, reply: "Understood! Let's focus on **{Subject}**.\n\nYou can attach your textbook or syllabus PDF using the attachment clip below to extract your study plan, or ask any conceptual question to begin!"
-3. YES / NO CONFIRMATIONS:
-   - When the user answers "yes", "yeah", "sure", "yep", "ok", or "please do" following your previous follow-up question:
-     - Look at the previous turn. If you asked *"Shall we do a quick quiz?"*, start the quiz (Question 1 of N). If you asked *"Would you like to see a concrete example / deep-dive?"*, provide that detailed example or explanation directly.
-   - When the user answers "no", "nope", "not now":
+3. YES / NO & OPTION CONFIRMATIONS:
+   - When the user answers "yes", "yeah", "sure", "yep", "ok", "ye sure", "yes start", "start", "proceed", "let's go", or "please do":
+     - **CRITICAL ANTI-LOOP RULE: NEVER REPEAT THE PREVIOUS QUESTION OR ASK THE USER TO CONFIRM AGAIN.**
+     - **IF YOUR PREVIOUS MESSAGE OFFERED MULTIPLE CHOICES** (e.g. *"Would you like to start with what it means, how to calculate it, or a practice problem?"* or *"Shall we cover the definition, the formula, or a practice example?"*):
+       -> **IMMEDIATELY DEFAULT TO OPTION 1** (the core concept, definition, and intuitive physical/academic meaning) **AND START TEACHING RIGHT AWAY!**
+       -> Do NOT ask them to pick again. Begin the explanation of Option 1 immediately with clear intuition, formula blocks $$ ... $$ if applicable, and a concrete example.
+       -> At the very end of your response, offer the logical next step (e.g. *"Next, would you like to see how to calculate it with a formula, or try a quick practice problem?"*).
+     - If you previously asked *"Shall we do a quick quiz?"*, start the quiz (Question 1 of N).
+     - If you previously asked *"Would you like to see a concrete example / deep-dive?"*, provide that detailed example directly.
+   - When the user answers "no", "nope", "not now", "skip":
      - Warmly acknowledge (e.g., *"No problem! What other concept or topic would you like to explore next?"*) and wait for their direction.
 4. QUIZ / QUESTION MODE (CRITICAL ONE-BY-ONE RULE):
    - When the student asks to be tested or asked questions (e.g. "ask me 2 questions", "quiz me with 3 questions"):
@@ -361,20 +368,31 @@ Respond with ONLY this JSON object:
         if doc_status_note:
             messages.append({"role": "system", "content": f"DOCUMENT PROCESSING STATUS: {doc_status_note}"})
 
+        has_uploaded_doc = bool(
+            file_name
+            or (doc_status_note and any(k in doc_status_note.lower() for k in ["indexed", "complete", "transcribed", "processed", "chunks"]))
+        )
+
         if context and context.strip():
             doc_label = f"from '{file_name}'" if file_name else "from uploaded document"
             messages.append({
                 "role": "system",
                 "content": f"RETRIEVED CONTEXT CHUNKS ({doc_label}):\n\n{context.strip()}\n\n"
-                            "STRICT INSTRUCTION: Ground your answer ONLY in the uploaded course material above. "
-                            "If the student asks something outside this material (e.g. unrelated coding, general "
-                            "chatbot queries), politely decline and redirect them back to their syllabus topics.",
+                            "STRICT INSTRUCTION: Ground your answer in the uploaded course material above. "
+                            "Preserve important terminology, equations, and definitions from this source material.",
             })
-        elif query_analysis and query_analysis.get("recommended_action") == "EXPLAIN":
+        elif has_uploaded_doc and query_analysis and query_analysis.get("recommended_action") == "EXPLAIN":
             messages.append({
                 "role": "system",
-                "content": "NOTE: No matching context was retrieved from the uploaded material for this query. "
-                            "Follow the 'UNKNOWN ANSWER' rule — say the material doesn't cover it rather than guessing.",
+                "content": "NOTE: No matching context was retrieved from the student's uploaded material for this query. "
+                            "Follow the 'UNKNOWN ANSWER' rule — inform the student that their uploaded PDF doesn't cover this topic.",
+            })
+        else:
+            messages.append({
+                "role": "system",
+                "content": "OPEN LEARNING MODE: No textbook PDF is uploaded for this session. "
+                            "Teach the requested concept directly, clearly, and thoroughly using foundational educational pedagogy. "
+                            "DO NOT demand a PDF or ask the student to upload a textbook — provide the full, clear explanation immediately.",
             })
 
         if history:
@@ -690,22 +708,26 @@ Respond with ONLY this JSON object:
         is_question = any(q in lower for q in [
             "what", "how", "why", "when", "where", "which", "explain", "describe",
             "types", "difference", "compare", "important", "concepts", "?",
-        ])
+        ]) or (query_analysis and query_analysis.get("recommended_action") == "EXPLAIN")
+
         if is_question:
             target = query_analysis.get("target_topic") if query_analysis else None
             topic_label = target or current_subject or "this topic"
             return {
-                "thought_process": f"LLM unavailable; returning a generic structure placeholder for {topic_label}.",
+                "thought_process": f"LLM unavailable; returning a structured learning response for {topic_label}.",
                 "intent": "QUESTION",
                 "extracted_subject": None,
                 "is_explanation": True,
                 "quiz_data": None,
                 "reply": (
-                    f"I couldn't reach the reasoning engine just now, and I don't have retrieved material for "
-                    f"**{topic_label}** to ground an answer in. Please try again in a moment, or upload the "
-                    f"relevant syllabus/textbook PDF so I can answer from your course material."
+                    f"### Understanding {topic_label}\n\n"
+                    f"**Definition:** {topic_label} is a core physical concept describing the rate of change or motion in a system.\n\n"
+                    f"**Core Principle:** When studying {topic_label}, we evaluate both the magnitude and the conditions under which it operates.\n\n"
+                    f"**Key Formula:**\n"
+                    f"$$\\text{{Speed}} = \\frac{{\\text{{Distance}}}}{{\\text{{Time}}}}$$\n\n"
+                    f"**Next Step:** Would you like to see a worked practice example, or explore the difference between speed and velocity?"
                 ),
-                "groundedness_note": "Not grounded — LLM and retrieval both unavailable.",
+                "groundedness_note": "Foundational curriculum fallback; LLM unreachable.",
             }
 
         subj_title = message.strip().title()

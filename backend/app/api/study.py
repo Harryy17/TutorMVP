@@ -289,6 +289,17 @@ async def chat_with_decision_agent(
         query_analysis=analysis,
         session_id=body.session_id,
     )
+
+    # Persist extracted subject to session if updated
+    if decision.get("extracted_subject") and decision.get("intent") == "SUBJECT_SPECIFIED" and body.session_id:
+        new_subj = decision["extracted_subject"]
+        if body.session_id in _study_sessions:
+            _study_sessions[body.session_id]["subject"] = new_subj
+        saved_state = session_manager.get_session_state(body.session_id, user_id=user_id)
+        if saved_state:
+            saved_state.setdefault("meta", {})["subject"] = new_subj
+            session_manager.save_session_state(body.session_id, saved_state, user_id=user_id)
+
     return decision
 
 

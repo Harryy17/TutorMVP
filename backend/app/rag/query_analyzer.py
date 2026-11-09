@@ -204,6 +204,52 @@ class QueryAnalyzerAgent:
                 recommended_action="GREET",
             ).as_dict()
 
+        # Affirmations & Confirmations ("yes", "sure", "ye sure", "yes start", "start", "ok", "go ahead")
+        is_confirmation = bool(re.fullmatch(
+            r"(yes|yeah|yep|sure|ye sure|yes sure|yes start|start|ok|okay|let's start|lets start|go ahead|proceed|please|yes please|let's go|lets go|begin|continue|definitely|alright|fine)[.!]?",
+            lower,
+        )) or bool(re.match(r"^(yes|sure|ye sure|ok|okay)\s+(start|please|do it|let's do it|lets go)\b", lower))
+        if is_confirmation:
+            return QueryPlan(
+                intent="EXPLANATION_REQUEST",
+                reasoning="Student confirmed affirmatively ('yes' / 'start') to proceed with the planned concept or explanation.",
+                target_topic=current_subject,
+                sub_questions=[raw_msg],
+                search_queries=[current_subject] if current_subject else [],
+                response_format="conceptual",
+                confidence=0.95,
+                needs_clarification=False,
+                recommended_action="EXPLAIN",
+            ).as_dict()
+
+        # Declines ("no", "nope", "not now", "skip")
+        is_decline = bool(re.fullmatch(r"(no|nope|not now|nah|skip|later|cancel|no thanks)[.!]?", lower))
+        if is_decline:
+            return QueryPlan(
+                intent="DECLINE",
+                reasoning="Student declined the suggested action or quiz.",
+                target_topic=current_subject,
+                confidence=0.95,
+                needs_clarification=False,
+                recommended_action="ACKNOWLEDGE",
+            ).as_dict()
+
+        # No Materials / Start from scratch ("i dont have the meterials", "no materials", "no pdf")
+        is_no_materials = bool(re.search(
+            r"\b(i\s*dont|i\s*don't|dont|don't|no)\s+(have\s+)?(the\s+)?(materials?|meterials?|textbooks?|books?|pdfs?|syllabus|notes)\b|\b(start from scratch|no documents?|teach me without pdf)\b",
+            lower,
+        ))
+        if is_no_materials:
+            return QueryPlan(
+                intent="NO_MATERIALS_DECLARED",
+                reasoning="Student has no uploaded documents or syllabus. Open learning mode should be used.",
+                target_topic=current_subject,
+                extracted_subject=current_subject,
+                confidence=0.95,
+                needs_clarification=False,
+                recommended_action="SET_SUBJECT",
+            ).as_dict()
+
         # High-Speed Fast-Path Heuristic: Standard questions, comparisons, quizzes, notes, or topics
         # evaluate in sub-millisecond time, cutting 4-8s of unnecessary LLM roundtrips!
         is_obvious_intent = (
@@ -399,6 +445,52 @@ class QueryAnalyzerAgent:
             or bool(re.search(r"\b(answer only|no pleasantries|no follow-?up|no chit-?chat)\b", lower))
         )
 
+        # Confirmations & Affirmations
+        is_confirmation = bool(re.fullmatch(
+            r"(yes|yeah|yep|sure|ye sure|yes sure|yes start|start|ok|okay|let's start|lets start|go ahead|proceed|please|yes please|let's go|lets go|begin|continue|definitely|alright|fine)[.!]?",
+            lower,
+        )) or bool(re.match(r"^(yes|sure|ye sure|ok|okay)\s+(start|please|do it|let's do it|lets go)\b", lower))
+        if is_confirmation:
+            return QueryPlan(
+                intent="EXPLANATION_REQUEST",
+                reasoning="Heuristic fallback: affirmative confirmation to proceed with the planned concept or explanation.",
+                target_topic=current_subject,
+                sub_questions=[raw_msg],
+                search_queries=[current_subject] if current_subject else [],
+                response_format="conceptual",
+                confidence=0.95,
+                needs_clarification=False,
+                recommended_action="EXPLAIN",
+            )
+
+        # Declines
+        is_decline = bool(re.fullmatch(r"(no|nope|not now|nah|skip|later|cancel|no thanks)[.!]?", lower))
+        if is_decline:
+            return QueryPlan(
+                intent="DECLINE",
+                reasoning="Heuristic fallback: student declined action or quiz.",
+                target_topic=current_subject,
+                confidence=0.95,
+                needs_clarification=False,
+                recommended_action="ACKNOWLEDGE",
+            )
+
+        # No Materials / Start from scratch
+        is_no_materials = bool(re.search(
+            r"\b(i\s*dont|i\s*don't|dont|don't|no)\s+(have\s+)?(the\s+)?(materials?|meterials?|textbooks?|books?|pdfs?|syllabus|notes)\b|\b(start from scratch|no documents?|teach me without pdf)\b",
+            lower,
+        ))
+        if is_no_materials:
+            return QueryPlan(
+                intent="NO_MATERIALS_DECLARED",
+                reasoning="Heuristic fallback: student indicates they have no materials; open learning mode.",
+                target_topic=current_subject,
+                extracted_subject=current_subject,
+                confidence=0.95,
+                needs_clarification=False,
+                recommended_action="SET_SUBJECT",
+            )
+
         if is_study_notes:
             clean_topic = _clean_topic_string(
                 re.sub(r"\b(give me|make|create|prepare|generate|summarize|as)?\s*(study notes?|cheat sheet|revision notes?|study map|notes?)\s*(on|for|about)?\s*", "", lower, flags=re.IGNORECASE)
@@ -454,6 +546,20 @@ class QueryAnalyzerAgent:
             )
 
         subj_title = raw_msg.title()
+        if current_subject and current_subject.lower() != lower:
+            return QueryPlan(
+                intent="EXPLANATION_REQUEST",
+                reasoning=f"Student specified concept '{subj_title}' within active subject '{current_subject}'.",
+                sub_questions=[raw_msg],
+                target_topic=subj_title,
+                search_queries=[f"{current_subject} {subj_title}", subj_title],
+                extracted_subject=current_subject,
+                response_format="conceptual",
+                confidence=0.85,
+                needs_clarification=False,
+                recommended_action="EXPLAIN",
+            )
+
         return QueryPlan(
             intent="NEW_SUBJECT_DECLARATION",
             reasoning="Heuristic fallback: no question markers found, treating as a subject name.",
