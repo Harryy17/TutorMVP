@@ -14,6 +14,8 @@
 *.crt
 credentials.json
 client_secret*.json
+k8s/*secret*.yaml
+!k8s/*secret*.example.yaml
 
 # ─── Python & Virtual Environments ───────────────────────────────────────────
 venv/

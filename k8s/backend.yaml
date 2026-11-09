@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: backend-deployment
+  namespace: tutormvp
+  labels:
+    app: tutormvp-backend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tutormvp-backend
+  template:
+    metadata:
+      labels:
+        app: tutormvp-backend
+    spec:
+      containers:
+        - name: backend
+          image: tutormvpacr.azurecr.io/tutormvp-backend:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - secretRef:
+                name: tutormvp-backend-secret
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1536Mi"
+          livenessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 15
+            periodSeconds: 20
+          readinessProbe:
+            httpGet:
+              path: /api/health
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend-service
+  namespace: tutormvp
+spec:
+  type: ClusterIP
+  selector:
+    app: tutormvp-backend
+  ports:
+    - protocol: TCP
+      port: 8000
+      targetPort: 8000
+

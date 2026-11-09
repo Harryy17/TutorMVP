@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: frontend-deployment
+  namespace: tutormvp
+  labels:
+    app: tutormvp-frontend
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: tutormvp-frontend
+  template:
+    metadata:
+      labels:
+        app: tutormvp-frontend
+    spec:
+      containers:
+        - name: frontend
+          image: tutormvpacr.azurecr.io/tutormvp-frontend:v1
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 80
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"
+            limits:
+              cpu: "500m"
+              memory: "256Mi"
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 10
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend-service
+  namespace: tutormvp
+spec:
+  type: LoadBalancer
+  selector:
+    app: tutormvp-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
+
