@@ -17,7 +17,7 @@ spec:
     spec:
       containers:
         - name: frontend
-          image: tutormvpacr.azurecr.io/tutormvp-frontend:v1
+          image: tutormvpacrxlfz7.azurecr.io/tutormvp-frontend:v1
           imagePullPolicy: Always
           ports:
             - containerPort: 80

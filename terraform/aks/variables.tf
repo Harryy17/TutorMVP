@@ -29,8 +29,8 @@ variable "node_count" {
 }
 
 variable "vm_size" {
-  description = "VM size for the nodes (Standard_B2s is affordable and suitable for dev/learning)"
+  description = "VM size for the nodes (Standard_D2s_v4 is widely supported in Azure eastus for AKS)"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2s_v4"
 }
 
