@@ -99,6 +99,53 @@ const chatMarkdownComponents = {
     }
     return <img src={src} alt={alt} {...props} />
   },
+  blockquote({ children }: any) {
+    return (
+      <blockquote className="my-4 p-5 rounded-2xl border border-slate-200/90 bg-white shadow-2xs space-y-3.5 not-italic">
+        {children}
+      </blockquote>
+    )
+  },
+  hr() {
+    return <hr className="my-3 border-t border-slate-100" />
+  },
+  p({ children, ...props }: any) {
+    // Detect pill badge patterns like [First equation], [Second equation], [Third equation]
+    if (children && (typeof children === 'string' || (Array.isArray(children) && typeof children[0] === 'string'))) {
+      const firstChild = Array.isArray(children) ? children[0] : children
+      if (typeof firstChild === 'string') {
+        const badgeMatch = firstChild.match(/^\s*\[(First|Second|Third|Fourth|Final)?\s*(equation|law|principle|formula|step)\]/i)
+        if (badgeMatch) {
+          const type = (badgeMatch[1] || '').toLowerCase()
+          const colorClasses =
+            type === 'second'
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/70'
+              : type === 'third'
+              ? 'bg-purple-50 text-purple-700 border-purple-200/70'
+              : 'bg-blue-50 text-blue-600 border-blue-200/70'
+
+          const badgeLabel = `${badgeMatch[1] || ''} ${badgeMatch[2]}`.trim()
+          const remainingFirst = firstChild.replace(badgeMatch[0], '').trim()
+          const rest = Array.isArray(children) ? children.slice(1) : []
+
+          return (
+            <div className="my-2.5">
+              <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${colorClasses}`}>
+                {badgeLabel.charAt(0).toUpperCase() + badgeLabel.slice(1)}
+              </span>
+              {(remainingFirst || rest.length > 0) && (
+                <div className="mt-1 leading-relaxed">
+                  {remainingFirst}
+                  {rest}
+                </div>
+              )}
+            </div>
+          )
+        }
+      }
+    }
+    return <p className="my-1.5 leading-relaxed" {...props}>{children}</p>
+  },
 }
 
 export default function GeminiStudyChat({

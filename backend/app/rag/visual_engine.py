@@ -87,11 +87,66 @@ class MathVariable(BaseModel):
     description: str = Field(..., max_length=300, description="Intuitive educational meaning and role")
 
 
+class PlotPoint(BaseModel):
+    x: float
+    y: float
+
+
+class PlotTick(BaseModel):
+    value: float
+    label: str = Field(..., max_length=30)
+
+
+class PlotAxis(BaseModel):
+    label: str = Field(..., max_length=50)
+    unit: Optional[str] = Field(None, max_length=20)
+    ticks: List[PlotTick] = Field(default_factory=list)
+
+
+class PlotCurve(BaseModel):
+    id: str = Field(..., max_length=40)
+    label: str = Field(..., max_length=60)
+    points: List[PlotPoint] = Field(default_factory=list)
+    style: Optional[str] = "solid"
+    color: Optional[str] = "blue"
+
+
+class PlotShadedArea(BaseModel):
+    id: str = Field(..., max_length=40)
+    label: str = Field(..., max_length=60)
+    polygon: List[PlotPoint] = Field(default_factory=list)
+    color: Optional[str] = "blue"
+
+
+class PlotProjection(BaseModel):
+    from_point: PlotPoint
+    to_point: PlotPoint
+    style: Optional[str] = "dashed"
+
+
+class PlotAnnotation(BaseModel):
+    x: float
+    y: float
+    label: str = Field(..., max_length=40)
+    point_dot: bool = True
+
+
+class CoordinatePlotData(BaseModel):
+    title: str = Field(..., max_length=100)
+    x_axis: PlotAxis
+    y_axis: PlotAxis
+    curves: List[PlotCurve] = Field(default_factory=list)
+    shaded_areas: Optional[List[PlotShadedArea]] = Field(default_factory=list)
+    projections: Optional[List[PlotProjection]] = Field(default_factory=list)
+    annotations: Optional[List[PlotAnnotation]] = Field(default_factory=list)
+
+
 class MathIllustrationData(BaseModel):
     primary_formula: str = Field(..., max_length=300, description="Core LaTeX formula in $$...$$ or standard LaTeX")
     variables: List[MathVariable] = Field(default_factory=list, max_length=10)
-    graph_type: Optional[str] = Field("function", description="'function', 'coordinates', or 'derivation'")
+    graph_type: Optional[str] = Field("function", description="'velocity_time', 'coordinate_plot', 'function', or 'derivation'")
     intuition: Optional[str] = Field(None, max_length=400, description="High-level geometric or conceptual intuition")
+    plot_data: Optional[CoordinatePlotData] = None
 
 
 class TimelineItem(BaseModel):
@@ -444,6 +499,7 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
         if visual_type == VisualType.MATHEMATICAL:
             formula_match = re.search(r"\$\$([^\$]+)\$\$", reply_text) or re.search(r"\$([^\$]+)\$", reply_text)
             is_motion = any(k in f"{query} {reply_text}".lower() for k in ["motion", "velocity", "acceleration", "speed", "kinematic", "equations of motion"])
+            plot_data = None
             if is_motion:
                 extracted_formula = formula_match.group(0) if formula_match else "$$ v = u + at \\quad \\text{and} \\quad s = ut + \\frac{1}{2}at^2 $$"
                 variables = [
@@ -455,6 +511,44 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
                 ]
                 intuition = "The slope of this graph represents acceleration, and the area underneath it represents displacement."
                 graph_type = "velocity_time"
+                plot_data = CoordinatePlotData(
+                    title="Velocity-Time Graph",
+                    x_axis=PlotAxis(
+                        label="Time",
+                        unit="s",
+                        ticks=[PlotTick(value=0, label="0"), PlotTick(value=8, label="t")],
+                    ),
+                    y_axis=PlotAxis(
+                        label="Velocity",
+                        unit="m/s",
+                        ticks=[PlotTick(value=0, label="0"), PlotTick(value=8, label="u"), PlotTick(value=20, label="v")],
+                    ),
+                    curves=[
+                        PlotCurve(
+                            id="acceleration_slope",
+                            label="Acceleration",
+                            points=[PlotPoint(x=0, y=8), PlotPoint(x=8, y=20)],
+                            style="solid",
+                            color="blue",
+                        )
+                    ],
+                    shaded_areas=[
+                        PlotShadedArea(
+                            id="displacement_area",
+                            label="Displacement (area)",
+                            polygon=[PlotPoint(x=0, y=0), PlotPoint(x=0, y=8), PlotPoint(x=8, y=20), PlotPoint(x=8, y=0)],
+                            color="blue",
+                        )
+                    ],
+                    projections=[
+                        PlotProjection(from_point=PlotPoint(x=0, y=8), to_point=PlotPoint(x=8, y=8), style="dashed"),
+                        PlotProjection(from_point=PlotPoint(x=8, y=0), to_point=PlotPoint(x=8, y=20), style="dashed"),
+                    ],
+                    annotations=[
+                        PlotAnnotation(x=0, y=8, label="u", point_dot=True),
+                        PlotAnnotation(x=8, y=20, label="v", point_dot=True),
+                    ],
+                )
             else:
                 extracted_formula = formula_match.group(0) if formula_match else "$$ f(x) = \\sigma(W^T x + b) $$"
                 variables = [
@@ -470,6 +564,7 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
                 intuition=intuition,
                 variables=variables,
                 graph_type=graph_type,
+                plot_data=plot_data,
             )
 
         # 3. Type-specific handling: TIMELINE

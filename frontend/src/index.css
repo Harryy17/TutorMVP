@@ -188,30 +188,40 @@ body {
 .markdown-content li { margin: 0.25em 0; }
 /* ─── Formula & Math Equation Callout Box ──────────────────────── */
 .markdown-content .katex-display {
-  background: #FFFFFF;
-  border: 1px solid #E5E7EB;
-  border-left: 3.5px solid #000000;
-  border-radius: 8px;
-  padding: 0.85rem 1.25rem;
-  margin: 1em 0;
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  padding: 0.35rem 0;
+  margin: 0.6em 0;
   overflow-x: auto;
-  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.03);
-  text-align: center;
+  box-shadow: none;
+  text-align: left;
 }
 
 .markdown-content .katex {
-  font-size: 1.05em;
-  color: #000000;
+  font-size: 1.08em;
+  color: #0f172a;
 }
 
 .markdown-content blockquote {
-  border-left: 3px solid #3B82F6;
-  padding: 0.6rem 1rem;
-  color: #4B5563;
-  background: #F0FDF4;
-  margin: 0.7em 0;
-  border-radius: 0 6px 6px 0;
+  border: 1px solid #E2E8F0;
+  padding: 1.25rem 1.5rem;
+  color: #1E293B;
+  background: #FFFFFF;
+  margin: 1.25em 0;
+  border-radius: 16px;
   font-style: normal;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
+}
+
+.markdown-content blockquote p {
+  margin: 0.4em 0;
+}
+
+.markdown-content blockquote hr {
+  margin: 1rem 0;
+  border: 0;
+  border-top: 1px solid #F1F5F9;
 }
 .markdown-content table {
   width: 100%;

@@ -47,11 +47,66 @@ export interface MathVariable {
   description: string
 }
 
+export interface PlotPoint {
+  x: number
+  y: number
+}
+
+export interface PlotTick {
+  value: number
+  label: string
+}
+
+export interface PlotAxis {
+  label: string
+  unit?: string
+  ticks?: PlotTick[]
+}
+
+export interface PlotCurve {
+  id: string
+  label: string
+  points: PlotPoint[]
+  style?: 'solid' | 'dashed' | 'dotted'
+  color?: string
+}
+
+export interface PlotShadedArea {
+  id: string
+  label: string
+  polygon: PlotPoint[]
+  color?: string
+}
+
+export interface PlotProjection {
+  from_point: PlotPoint
+  to_point: PlotPoint
+  style?: 'dashed' | 'dotted' | 'solid'
+}
+
+export interface PlotAnnotation {
+  x: number
+  y: number
+  label: string
+  point_dot?: boolean
+}
+
+export interface CoordinatePlotData {
+  title: string
+  x_axis: PlotAxis
+  y_axis: PlotAxis
+  curves: PlotCurve[]
+  shaded_areas?: PlotShadedArea[]
+  projections?: PlotProjection[]
+  annotations?: PlotAnnotation[]
+}
+
 export interface MathIllustrationData {
   primary_formula: string
   variables?: MathVariable[]
   graph_type?: string
   intuition?: string
+  plot_data?: CoordinatePlotData
 }
 
 export interface TimelineItem {

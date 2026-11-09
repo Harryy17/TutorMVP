@@ -1,8 +1,8 @@
 import React, { useState } from 'react'
 import { motion } from 'framer-motion'
 import katex from 'katex'
-import { Sigma, BookOpen, Activity, Info } from 'lucide-react'
-import type { VisualSpecification, MathVariable } from '../../types/visual'
+import { Sigma, BookOpen } from 'lucide-react'
+import type { VisualSpecification, MathVariable, CoordinatePlotData } from '../../types/visual'
 
 interface MathematicalIllustrationRendererProps {
   spec: VisualSpecification
@@ -13,34 +13,17 @@ export const MathematicalIllustrationRenderer: React.FC<MathematicalIllustration
   const primaryFormula = mathData?.primary_formula || '$$ v = u + at $$'
   const rawLatex = primaryFormula.replace(/^\$\$|\$\$$/g, '').trim()
 
-  const titleLower = (spec.title || '').toLowerCase()
-  const intuitionLower = (mathData?.intuition || '').toLowerCase()
-  const isVelocityTimeGraph =
-    mathData?.graph_type === 'velocity_time' ||
-    titleLower.includes('velocity') ||
-    titleLower.includes('motion') ||
-    titleLower.includes('acceleration') ||
-    titleLower.includes('kinematic') ||
-    intuitionLower.includes('velocity') ||
-    intuitionLower.includes('slope') ||
-    intuitionLower.includes('displacement')
+  const plotData: CoordinatePlotData | undefined = mathData?.plot_data
 
   const variables: MathVariable[] =
     mathData?.variables && mathData.variables.length > 0
       ? mathData.variables
-      : isVelocityTimeGraph
-      ? [
+      : [
           { symbol: 'v', name: 'Final Velocity', description: 'Velocity reached after accelerating over time t.' },
           { symbol: 'u', name: 'Initial Velocity', description: 'Starting velocity of the object at time t = 0.' },
           { symbol: 'a', name: 'Uniform Acceleration', description: 'Slope of the v-t graph; constant rate of change of velocity.' },
           { symbol: 't', name: 'Time Elapsed', description: 'Duration over which acceleration occurs.' },
           { symbol: 's', name: 'Displacement', description: 'Total distance traveled; equal to the area under the v-t graph.' },
-        ]
-      : [
-          { symbol: 'W', name: 'Weight Matrix', description: 'Trainable parameters determining feature significance.' },
-          { symbol: 'x', name: 'Input Vector', description: 'Raw feature vector or embedding passed into the layer.' },
-          { symbol: 'b', name: 'Bias Term', description: 'Affine offset allowing the model to shift the activation curve.' },
-          { symbol: '\\sigma', name: 'Activation Function', description: 'Non-linear transformation introducing expressive power.' },
         ]
 
   const [selectedVar, setSelectedVar] = useState<MathVariable>(variables[0])
@@ -57,259 +40,296 @@ export const MathematicalIllustrationRenderer: React.FC<MathematicalIllustration
     renderedFormulaHtml = `<div class="font-mono text-center py-2">${rawLatex}</div>`
   }
 
+  // Dynamic SVG Coordinate Scaling Engine
+  const renderDynamicPlot = (plot: CoordinatePlotData) => {
+    // 1. Collect all coordinate bounds from data
+    const xVals: number[] = [
+      ...(plot.x_axis.ticks?.map((t) => t.value) || []),
+      ...plot.curves.flatMap((c) => c.points.map((p) => p.x)),
+      ...(plot.shaded_areas?.flatMap((a) => a.polygon.map((p) => p.x)) || []),
+      ...(plot.projections?.flatMap((pr) => [pr.from_point.x, pr.to_point.x]) || []),
+      ...(plot.annotations?.map((a) => a.x) || []),
+    ]
+    const yVals: number[] = [
+      ...(plot.y_axis.ticks?.map((t) => t.value) || []),
+      ...plot.curves.flatMap((c) => c.points.map((p) => p.y)),
+      ...(plot.shaded_areas?.flatMap((a) => a.polygon.map((p) => p.y)) || []),
+      ...(plot.projections?.flatMap((pr) => [pr.from_point.y, pr.to_point.y]) || []),
+      ...(plot.annotations?.map((a) => a.y) || []),
+    ]
+
+    const minX = xVals.length > 0 ? Math.min(0, ...xVals) : 0
+    const maxX = xVals.length > 0 ? Math.max(1, ...xVals) : 10
+    const minY = yVals.length > 0 ? Math.min(0, ...yVals) : 0
+    const maxY = yVals.length > 0 ? Math.max(1, ...yVals) : 25
+
+    // Canvas & Plotting Viewport
+    const svgWidth = 540
+    const svgHeight = 330
+    const padLeft = 75
+    const padRight = 60
+    const padTop = 45
+    const padBottom = 60
+
+    const plotW = svgWidth - padLeft - padRight
+    const plotH = svgHeight - padTop - padBottom
+
+    // Mathematical to SVG Coordinate Transformations
+    const scaleX = (x: number) => padLeft + ((x - minX) / (maxX - minX || 1)) * plotW
+    const scaleY = (y: number) => svgHeight - padBottom - ((y - minY) / (maxY - minY || 1)) * plotH
+
+    return (
+      <svg
+        viewBox={`0 0 ${svgWidth} ${svgHeight}`}
+        className="w-full h-auto overflow-visible"
+        style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.02))' }}
+      >
+        <defs>
+          <marker
+            id="axis-arrow"
+            viewBox="0 0 10 10"
+            refX="6"
+            refY="5"
+            markerWidth="6"
+            markerHeight="6"
+            orient="auto-start-reverse"
+          >
+            <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#1e293b" />
+          </marker>
+        </defs>
+
+        {/* 1. Dynamic Shaded Areas */}
+        {plot.shaded_areas?.map((area) => {
+          const pointsStr = area.polygon.map((p) => `${scaleX(p.x)},${scaleY(p.y)}`).join(' ')
+          const centroidX =
+            area.polygon.reduce((sum, p) => sum + scaleX(p.x), 0) / (area.polygon.length || 1)
+          const centroidY =
+            area.polygon.reduce((sum, p) => sum + scaleY(p.y), 0) / (area.polygon.length || 1)
+
+          return (
+            <g key={area.id}>
+              <motion.polygon
+                points={pointsStr}
+                fill="#dbeafe"
+                fillOpacity={hoveredElement === area.id ? 0.9 : 0.75}
+                stroke="#93c5fd"
+                strokeWidth="1.5"
+                className="cursor-pointer transition-all"
+                onMouseEnter={() => setHoveredElement(area.id)}
+                onMouseLeave={() => setHoveredElement(null)}
+              />
+              {area.label && (
+                <text
+                  x={centroidX}
+                  y={centroidY}
+                  textAnchor="middle"
+                  className="font-bold fill-blue-600 text-[17px] tracking-wide pointer-events-none select-none"
+                >
+                  {area.label}
+                </text>
+              )}
+            </g>
+          )
+        })}
+
+        {/* 2. Dynamic Dashed Projection Lines */}
+        {plot.projections?.map((proj, idx) => (
+          <line
+            key={idx}
+            x1={scaleX(proj.from_point.x)}
+            y1={scaleY(proj.from_point.y)}
+            x2={scaleX(proj.to_point.x)}
+            y2={scaleY(proj.to_point.y)}
+            stroke="#94a3b8"
+            strokeWidth="1.5"
+            strokeDasharray={proj.style === 'dotted' ? '2,3' : '5,5'}
+          />
+        ))}
+
+        {/* 3. Coordinate Axes with Arrows */}
+        {/* Y Axis */}
+        <line
+          x1={scaleX(minX)}
+          y1={scaleY(minY)}
+          x2={scaleX(minX)}
+          y2={padTop - 12}
+          stroke="#1e293b"
+          strokeWidth="2.5"
+          markerEnd="url(#axis-arrow)"
+        />
+        <text
+          x={scaleX(minX)}
+          y={padTop - 22}
+          textAnchor="middle"
+          className="font-semibold text-[17px] fill-slate-900 select-none"
+        >
+          {plot.y_axis.label}
+        </text>
+
+        {/* X Axis */}
+        <line
+          x1={scaleX(minX)}
+          y1={scaleY(minY)}
+          x2={svgWidth - padRight + 20}
+          y2={scaleY(minY)}
+          stroke="#1e293b"
+          strokeWidth="2.5"
+          markerEnd="url(#axis-arrow)"
+        />
+        <text
+          x={svgWidth - padRight + 38}
+          y={scaleY(minY) + 24}
+          textAnchor="start"
+          className="font-semibold text-[17px] fill-slate-900 select-none"
+        >
+          {plot.x_axis.label}
+        </text>
+
+        {/* 4. Dynamic Axis Ticks & Labels */}
+        {/* X-Axis Ticks */}
+        {plot.x_axis.ticks?.map((tick, idx) => (
+          <text
+            key={idx}
+            x={scaleX(tick.value)}
+            y={scaleY(minY) + 24}
+            textAnchor="middle"
+            className="font-serif italic font-semibold text-[17px] fill-slate-900 select-none cursor-pointer"
+            onClick={() => {
+              const match = variables.find((v) => v.symbol === tick.label)
+              if (match) setSelectedVar(match)
+            }}
+          >
+            {tick.label}
+          </text>
+        ))}
+
+        {/* Y-Axis Ticks */}
+        {plot.y_axis.ticks?.map((tick, idx) => (
+          <text
+            key={idx}
+            x={scaleX(minX) - 18}
+            y={scaleY(tick.value) + 6}
+            textAnchor="end"
+            className="font-serif italic font-semibold text-[17px] fill-slate-900 select-none cursor-pointer"
+            onClick={() => {
+              const match = variables.find((v) => v.symbol === tick.label)
+              if (match) setSelectedVar(match)
+            }}
+          >
+            {tick.label}
+          </text>
+        ))}
+
+        {/* 5. Dynamic Curves & Slopes */}
+        {plot.curves.map((curve) => {
+          if (curve.points.length < 2) return null
+          const pathD = curve.points
+            .map((p, i) => `${i === 0 ? 'M' : 'L'} ${scaleX(p.x)} ${scaleY(p.y)}`)
+            .join(' ')
+
+          const midIdx = Math.floor(curve.points.length / 2)
+          const midP = curve.points[midIdx]
+          const labelX = scaleX(midP.x)
+          const labelY = scaleY(midP.y) - 18
+
+          return (
+            <g key={curve.id}>
+              <motion.path
+                d={pathD}
+                fill="none"
+                stroke="#2563eb"
+                strokeWidth={hoveredElement === curve.id ? 5.5 : 4.5}
+                strokeLinecap="round"
+                strokeDasharray={curve.style === 'dashed' ? '6,6' : undefined}
+                className="cursor-pointer transition-all"
+                onMouseEnter={() => setHoveredElement(curve.id)}
+                onMouseLeave={() => setHoveredElement(null)}
+              />
+              {curve.label && (
+                <text
+                  x={labelX}
+                  y={labelY}
+                  textAnchor="middle"
+                  className="font-bold fill-blue-600 text-[18px] select-none cursor-pointer"
+                  onMouseEnter={() => setHoveredElement(curve.id)}
+                  onMouseLeave={() => setHoveredElement(null)}
+                >
+                  {curve.label}
+                </text>
+              )}
+            </g>
+          )
+        })}
+
+        {/* 6. Dynamic Annotations & Dots */}
+        {plot.annotations?.map((ann, idx) => (
+          <g key={idx}>
+            {ann.point_dot && (
+              <circle
+                cx={scaleX(ann.x)}
+                cy={scaleY(ann.y)}
+                r="7"
+                fill="#2563eb"
+                stroke="#ffffff"
+                strokeWidth="2.5"
+                className="cursor-pointer hover:scale-125 transition-transform"
+                onClick={() => {
+                  const match = variables.find((v) => v.symbol === ann.label)
+                  if (match) setSelectedVar(match)
+                }}
+              />
+            )}
+            {ann.label && (
+              <text
+                x={scaleX(ann.x) + 20}
+                y={scaleY(ann.y) + 6}
+                className="font-serif italic font-semibold text-[17px] fill-slate-900 select-none cursor-pointer"
+                onClick={() => {
+                  const match = variables.find((v) => v.symbol === ann.label)
+                  if (match) setSelectedVar(match)
+                }}
+              >
+                {ann.label}
+              </text>
+            )}
+          </g>
+        ))}
+      </svg>
+    )
+  }
+
   return (
     <div className="w-full py-3 select-none">
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-xs transition-all hover:shadow-sm">
-        {/* Graph / Diagram Header */}
+        {/* Header */}
         <div className="px-5 py-3.5 border-b border-slate-100 bg-slate-50/70 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-blue-600 animate-pulse" />
             <h3 className="font-semibold text-sm text-slate-900 tracking-tight">
-              {isVelocityTimeGraph ? 'Velocity-Time Graph' : spec.title || 'Mathematical Model'}
+              {plotData?.title || spec.title || 'Mathematical Model'}
             </h3>
           </div>
           <span className="text-[11px] font-medium text-slate-500 bg-white border border-slate-200 px-2.5 py-0.5 rounded-full shadow-2xs">
-            {isVelocityTimeGraph ? 'Kinematics 2D Plot' : 'Interactive Formulation'}
+            {plotData ? 'Dynamic 2D Coordinate Plot' : 'Mathematical Formulation'}
           </span>
         </div>
 
-        {/* 2D Vector Coordinate Graph (Exact Match to Syllabus Figure) */}
-        {isVelocityTimeGraph && (
+        {/* LLM-Generated Dynamic Coordinate Plot */}
+        {plotData && (
           <div className="p-4 sm:p-6 bg-white flex flex-col items-center justify-center border-b border-slate-100">
             <div className="w-full max-w-[540px] relative">
-              <svg
-                viewBox="0 0 540 330"
-                className="w-full h-auto overflow-visible"
-                style={{ filter: 'drop-shadow(0 1px 2px rgba(0,0,0,0.02))' }}
-              >
-                <defs>
-                  {/* Arrow marker for coordinate axes */}
-                  <marker
-                    id="axis-arrow"
-                    viewBox="0 0 10 10"
-                    refX="6"
-                    refY="5"
-                    markerWidth="6"
-                    markerHeight="6"
-                    orient="auto-start-reverse"
-                  >
-                    <path d="M 0 1.5 L 8 5 L 0 8.5 z" fill="#1e293b" />
-                  </marker>
-                </defs>
+              {renderDynamicPlot(plotData)}
 
-                {/* Shaded Area: Displacement (Trapezoid from 0 to t under the line) */}
-                <motion.polygon
-                  points="75,190 400,80 400,270 75,270"
-                  fill="#dbeafe"
-                  fillOpacity={hoveredElement === 'displacement' ? '0.9' : '0.75'}
-                  stroke="#93c5fd"
-                  strokeWidth="1.5"
-                  className="cursor-pointer transition-all"
-                  onMouseEnter={() => {
-                    setHoveredElement('displacement')
-                    const match = variables.find((v) => v.symbol === 's')
-                    if (match) setSelectedVar(match)
-                  }}
-                  onMouseLeave={() => setHoveredElement(null)}
-                />
-
-                {/* Shaded Area Label */}
-                <text
-                  x="245"
-                  y="235"
-                  textAnchor="middle"
-                  className="font-bold fill-blue-600 text-[17px] tracking-wide pointer-events-none select-none"
-                >
-                  Displacement (area)
-                </text>
-
-                {/* Dashed Horizontal Line from u to vertical projection */}
-                <line
-                  x1="75"
-                  y1="190"
-                  x2="400"
-                  y2="190"
-                  stroke="#94a3b8"
-                  strokeWidth="1.5"
-                  strokeDasharray="5,5"
-                />
-
-                {/* Dashed Vertical Line from (t, v) down to t on Time axis */}
-                <line
-                  x1="400"
-                  y1="80"
-                  x2="400"
-                  y2="270"
-                  stroke="#94a3b8"
-                  strokeWidth="1.5"
-                  strokeDasharray="5,5"
-                />
-
-                {/* Coordinate Axes */}
-                {/* Y Axis: Velocity */}
-                <line
-                  x1="75"
-                  y1="270"
-                  x2="75"
-                  y2="35"
-                  stroke="#1e293b"
-                  strokeWidth="2.5"
-                  markerEnd="url(#axis-arrow)"
-                />
-                <text
-                  x="75"
-                  y="22"
-                  textAnchor="middle"
-                  className="font-semibold text-[17px] fill-slate-900 select-none"
-                >
-                  Velocity
-                </text>
-
-                {/* X Axis: Time */}
-                <line
-                  x1="75"
-                  y1="270"
-                  x2="480"
-                  y2="270"
-                  stroke="#1e293b"
-                  strokeWidth="2.5"
-                  markerEnd="url(#axis-arrow)"
-                />
-                <text
-                  x="498"
-                  y="295"
-                  textAnchor="start"
-                  className="font-semibold text-[17px] fill-slate-900 select-none"
-                >
-                  Time
-                </text>
-
-                {/* Origin Label '0' */}
-                <text
-                  x="60"
-                  y="290"
-                  textAnchor="end"
-                  className="font-mono text-[16px] fill-slate-800 select-none"
-                >
-                  0
-                </text>
-
-                {/* Initial Velocity 'u' on Y-axis */}
-                <text
-                  x="54"
-                  y="196"
-                  textAnchor="end"
-                  className="font-serif italic font-semibold text-[18px] fill-slate-900 select-none cursor-pointer"
-                  onClick={() => {
-                    const match = variables.find((v) => v.symbol === 'u')
-                    if (match) setSelectedVar(match)
-                  }}
-                >
-                  u
-                </text>
-
-                {/* Final Velocity 'v' */}
-                <text
-                  x="422"
-                  y="86"
-                  textAnchor="start"
-                  className="font-serif italic font-semibold text-[18px] fill-slate-900 select-none cursor-pointer"
-                  onClick={() => {
-                    const match = variables.find((v) => v.symbol === 'v')
-                    if (match) setSelectedVar(match)
-                  }}
-                >
-                  v
-                </text>
-
-                {/* Time 't' label on X-axis */}
-                <text
-                  x="400"
-                  y="296"
-                  textAnchor="middle"
-                  className="font-serif italic font-semibold text-[18px] fill-slate-900 select-none cursor-pointer"
-                  onClick={() => {
-                    const match = variables.find((v) => v.symbol === 't')
-                    if (match) setSelectedVar(match)
-                  }}
-                >
-                  t
-                </text>
-
-                {/* Slanted Motion Line: Acceleration */}
-                <line
-                  x1="75"
-                  y1="190"
-                  x2="400"
-                  y2="80"
-                  stroke="#2563eb"
-                  strokeWidth={hoveredElement === 'acceleration' ? '5.5' : '4.5'}
-                  strokeLinecap="round"
-                  className="cursor-pointer transition-all"
-                  onMouseEnter={() => {
-                    setHoveredElement('acceleration')
-                    const match = variables.find((v) => v.symbol === 'a')
-                    if (match) setSelectedVar(match)
-                  }}
-                  onMouseLeave={() => setHoveredElement(null)}
-                />
-
-                {/* Acceleration Label along the slope */}
-                <text
-                  x="235"
-                  y="125"
-                  textAnchor="middle"
-                  className="font-bold fill-blue-600 text-[18px] select-none cursor-pointer"
-                  onMouseEnter={() => {
-                    setHoveredElement('acceleration')
-                    const match = variables.find((v) => v.symbol === 'a')
-                    if (match) setSelectedVar(match)
-                  }}
-                  onMouseLeave={() => setHoveredElement(null)}
-                >
-                  Acceleration
-                </text>
-
-                {/* Dot at (0, u) */}
-                <circle
-                  cx="75"
-                  cy="190"
-                  r="7"
-                  fill="#2563eb"
-                  stroke="#ffffff"
-                  strokeWidth="2.5"
-                  className="cursor-pointer hover:scale-125 transition-transform"
-                  onClick={() => {
-                    const match = variables.find((v) => v.symbol === 'u')
-                    if (match) setSelectedVar(match)
-                  }}
-                />
-
-                {/* Dot at (t, v) */}
-                <circle
-                  cx="400"
-                  cy="80"
-                  r="7"
-                  fill="#2563eb"
-                  stroke="#ffffff"
-                  strokeWidth="2.5"
-                  className="cursor-pointer hover:scale-125 transition-transform"
-                  onClick={() => {
-                    const match = variables.find((v) => v.symbol === 'v')
-                    if (match) setSelectedVar(match)
-                  }}
-                />
-              </svg>
-
-              {/* Caption Underneath Graph */}
-              <p className="text-xs text-slate-500 text-center mt-2.5 font-medium">
-                The slope of this graph represents <strong>acceleration</strong>, and the area underneath it represents <strong>displacement</strong>.
-              </p>
+              {mathData?.intuition && (
+                <p className="text-xs text-slate-500 text-center mt-2.5 font-medium">
+                  {mathData.intuition}
+                </p>
+              )}
             </div>
           </div>
         )}
 
-        {/* Formula Hero Display */}
+        {/* Formula Display */}
         <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-col items-center justify-center relative">
           <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1.5">
             <Sigma size={14} /> Key Governing Equation
@@ -320,14 +340,14 @@ export const MathematicalIllustrationRenderer: React.FC<MathematicalIllustration
             dangerouslySetInnerHTML={{ __html: renderedFormulaHtml }}
           />
 
-          {mathData?.intuition && !isVelocityTimeGraph && (
+          {mathData?.intuition && !plotData && (
             <p className="text-xs text-slate-300 text-center mt-2 max-w-lg leading-relaxed italic">
               "{mathData.intuition}"
             </p>
           )}
         </div>
 
-        {/* Interactive Variable Callout Bar */}
+        {/* Interactive Variable Inspection Bar */}
         <div className="p-4 bg-slate-50 border-b border-slate-200">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 block mb-2">
             Interactive Variable Inspection (Click to Deconstruct):

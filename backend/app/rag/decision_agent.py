@@ -106,14 +106,39 @@ RESPONSE GUIDELINES:
        `.md` file as-is.
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
     clearly labeled section (bold sub-heading per sub-question) rather than blending them into one block.
-- **MATHEMATICAL EQUATIONS, FORMULAS & DERIVATIONS**:
-  - Always put core mathematical equations, laws, and algebraic progressions in standalone display math `$$ ... $$` so they automatically render inside dedicated formula blocks.
-  - When explaining or deriving mathematical or physics equations (such as equations of motion, kinetic energy, quadratic formula, or proofs):
-    1. Introduce each derivation with a clean bold heading (e.g. `**Derivation of the first equation**` or `**Derivation of the second equation**`).
-    2. Structure the derivation step-by-step with clean transitional phrases on separate lines (e.g. "We know:", "Therefore:", "Rearranging:", "So,").
-    3. Place each algebraic intermediate step in a standalone centered `$$ ... $$` block (e.g. `$$a = \frac{v - u}{t}$$`).
-    4. Conclude each derivation by highlighting the final derived equation inside a LaTeX box: `$$\boxed{v = u + at}$$` or `$$\boxed{s = ut + \frac{1}{2}at^2}$$`.
-  - State the physical interpretation of graph slope and area under the curve explicitly (e.g. *"The slope of this graph represents acceleration, and the area underneath it represents displacement."*).
+- **MATHEMATICAL EQUATIONS, FORMULAS & DERIVATIONS (CRITICAL STYLE RULES)**:
+  - When explaining scientific laws, motion, kinematics, or mathematical formulas, ALWAYS format the response in this clean structured pedagogical style:
+    1. **Numbered Main Sections**: Use clean numbered headings (e.g. `### 2. The three equations of motion`, `### 3. How are these equations derived?`).
+    2. **Equation Showcase Cards**: Group the equations inside a clean blockquote card container (`> ...`) with:
+       - Pill badges in brackets: `> [First equation]`, `> [Second equation]`, `> [Third equation]`
+       - The core formula in display math: `> $$v = u + at$$`
+       - The verbal / word equation in bold: `> **Final velocity = Initial velocity + (Acceleration × Time)**`
+       - The primary use case: `> Used to calculate the final velocity of an object.`
+       - Subtle dividers separating equations: `> ---`
+       - Repeat for the second and third equations:
+         `> [Second equation]`
+         `> $$s = ut + \frac{1}{2}at^2$$`
+         `> **Displacement = Initial velocity × Time + Half × Acceleration × Time²**`
+         `> Used to calculate the distance covered in a particular direction (displacement).`
+         `> ---`
+         `> [Third equation]`
+         `> $$v^2 = u^2 + 2as$$`
+         `> Used to calculate final velocity when time is not given.`
+    3. **Visual Graph Introduction**: Introduce the graph with a clear bridge sentence:
+       `Let's use a velocity-time graph.`
+       `The slope of this graph represents acceleration, and the area underneath it represents displacement.`
+    4. **Step-by-Step Derivations**:
+       - Bold subsection title: `**Derivation of the first equation**`
+       - Connective reasoning phrases on dedicated lines:
+         `We know:`
+         `$$a = \frac{\text{Change in velocity}}{\text{Time}}$$`
+         `Therefore:`
+         `$$a = \frac{v - u}{t}$$`
+         `Rearranging:`
+         `$$at = v - u$$`
+         `So,`
+         `$$\boxed{v = u + at}$$`
+       - Continue with `**Derivation of the second equation**` and `**Derivation of the third equation**`.
 - **NEVER OUTPUT RAW ASCII ART, CODE-BLOCK DRAWINGS, OR TEXT-BASED DIAGRAMS**:
   - Do NOT draw graphs, diagrams, or flowcharts using code blocks (``` ... ```) or monospace characters (`|`, `/`, `\`, `-`, `^`, `>`, `•`, `_`).
   - NEVER output Mermaid code or HTML/SVG snippets in text.
@@ -178,7 +203,39 @@ JSON SCHEMA:
   "reply": "Clean Markdown formatted text of the question or answer evaluation",
   "response_format": "conceptual" | "comparison" | "list" | "diagram" | "quiz" | "study_plan" | "study_notes",
   "export_ready": true | false,
-  "groundedness_note": "1 short sentence: which parts of the reply are directly supported by retrieved context vs general knowledge, or 'not found in material' if applicable"
+  "groundedness_note": "1 short sentence: which parts of the reply are directly supported by retrieved context vs general knowledge, or 'not found in material' if applicable",
+  "visual_spec": {
+    "visual_required": true,
+    "visual_type": "mathematical" | "scientific" | "process" | "comparison" | "step_by_step" | "architecture" | "concept_map" | "timeline" | "hierarchy",
+    "title": "Title for figure/plot",
+    "description": "Short description of what the figure illustrates",
+    "math_data": {
+      "primary_formula": "$$ v = u + at $$",
+      "intuition": "The slope of this graph represents acceleration, and the area underneath it represents displacement.",
+      "variables": [
+        {"symbol": "v", "name": "Final Velocity", "description": "Velocity reached after accelerating for time t."},
+        {"symbol": "u", "name": "Initial Velocity", "description": "Starting velocity at t = 0."},
+        {"symbol": "a", "name": "Uniform Acceleration", "description": "Slope of the v-t graph; rate of change of velocity."},
+        {"symbol": "t", "name": "Time Elapsed", "description": "Duration over which acceleration occurs."},
+        {"symbol": "s", "name": "Displacement", "description": "Total area under the velocity-time graph."}
+      ],
+      "plot_data": {
+        "title": "Velocity-Time Graph",
+        "x_axis": {"label": "Time", "unit": "s", "ticks": [{"value": 0, "label": "0"}, {"value": 8, "label": "t"}]},
+        "y_axis": {"label": "Velocity", "unit": "m/s", "ticks": [{"value": 0, "label": "0"}, {"value": 8, "label": "u"}, {"value": 20, "label": "v"}]},
+        "curves": [{"id": "accel_slope", "label": "Acceleration", "points": [{"x": 0, "y": 8}, {"x": 8, "y": 20}]}],
+        "shaded_areas": [{"id": "disp_area", "label": "Displacement (area)", "polygon": [{"x": 0, "y": 0}, {"x": 0, "y": 8}, {"x": 8, "y": 20}, {"x": 8, "y": 0}]}],
+        "projections": [
+          {"from_point": {"x": 0, "y": 8}, "to_point": {"x": 8, "y": 8}},
+          {"from_point": {"x": 8, "y": 0}, "to_point": {"x": 8, "y": 20}}
+        ],
+        "annotations": [
+          {"x": 0, "y": 8, "label": "u", "point_dot": true},
+          {"x": 8, "y": 20, "label": "v", "point_dot": true}
+        ]
+      }
+    }
+  } | null
 }
 Respond with ONLY this JSON object, no preamble, no markdown fences.
 """
@@ -309,8 +366,17 @@ Respond with ONLY this JSON object:
         ):
             result = await self._maybe_reground(result, context, message, query_analysis, generated_image_info)
 
-        # Dynamic Visual Explanation Pipeline
-        if result.get("is_explanation") and visual_engine.should_generate_visual(
+        # Dynamic Visual Explanation Pipeline (LLM generated or dynamically synthesized)
+        if result.get("visual_spec"):
+            try:
+                from app.rag.visual_engine import VisualSpecification
+                validated = VisualSpecification(**result["visual_spec"])
+                result["visual_spec"] = validated.model_dump()
+            except Exception as val_err:
+                print(f"[DecisionAgent] LLM visual spec validation note, synthesizing fallback: {val_err}")
+                result["visual_spec"] = None
+
+        if not result.get("visual_spec") and result.get("is_explanation") and visual_engine.should_generate_visual(
             message=message,
             query_analysis=query_analysis,
             reply_text=result.get("reply", ""),
