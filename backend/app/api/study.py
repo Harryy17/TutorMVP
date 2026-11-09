@@ -247,10 +247,19 @@ async def chat_with_decision_agent(
         history=body.history,
     )
 
-    # 2. Use target concept or search queries for precise FTS5 context retrieval
-    search_terms = analysis.get("search_queries") or [body.message]
-    search_query = " OR ".join([f'"{q}"' if " " in q else q for q in search_terms[:2]]) if search_terms else body.message
-    combined_query = f"{body.message} {search_query}".strip()
+    # 2. Use canonical target concept & expanded search queries for precise vector + FTS retrieval
+    target_topic = analysis.get("target_topic")
+    raw_search_terms = analysis.get("search_queries") or []
+    all_search_terms = []
+    if target_topic:
+        all_search_terms.append(target_topic)
+    for term in raw_search_terms:
+        if term and term.lower() not in [t.lower() for t in all_search_terms]:
+            all_search_terms.append(term)
+    if not all_search_terms:
+        all_search_terms = [body.message]
+
+    combined_query = " ".join(all_search_terms[:4])
 
     if body.session_id:
         context, doc_status_note, _ = doc_processor.retrieve_context(

@@ -506,12 +506,21 @@ class PgVectorStore:
             if user_id:
                 chunks = [c for c in chunks if c.get("user_id") == user_id]
 
-        q_words = set(re.findall(r"\w+", query.lower()))
+        STOP_WORDS = {"a", "an", "the", "and", "or", "of", "in", "on", "at", "to", "for", "with", "by", "from", "is", "are", "was", "were", "what", "how", "why", "explain", "describe", "tell", "me", "about"}
+        all_words = re.findall(r"\w+", query.lower())
+        q_words = {w for w in all_words if len(w) > 2 and w not in STOP_WORDS}
+        if not q_words:
+            q_words = set(all_words)
+
+        phrases = [f"{all_words[i]} {all_words[i+1]}" for i in range(len(all_words) - 1) if all_words[i] not in STOP_WORDS or all_words[i+1] not in STOP_WORDS]
+
         scored = []
         for c in chunks:
             content = c.get("content", "").lower()
-            matches = sum(1 for w in q_words if w in content)
-            scored.append((matches, c))
+            word_matches = sum(1 for w in q_words if w in content)
+            phrase_matches = sum(3 for p in phrases if p in content)
+            total_score = word_matches + phrase_matches
+            scored.append((total_score, c))
         scored.sort(key=lambda x: x[0], reverse=True)
         return [
             {

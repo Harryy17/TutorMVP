@@ -725,8 +725,11 @@ class DocumentProcessor:
         if not selected_chunks and doc and doc.chunks:
             selected_chunks = doc.chunks[:3]
 
+        # Sort selected chunks chronologically by page number for coherent reading
+        chronological_chunks = sorted(selected_chunks[:top_k], key=lambda c: (c.page, c.chunk_id))
+
         context_blocks = []
-        for c in selected_chunks[:top_k]:
+        for c in chronological_chunks:
             context_blocks.append(f"[Page {c.page} | Type: {c.source_type}]\n{c.content.strip()}")
 
         formatted_context = "\n\n".join(context_blocks)

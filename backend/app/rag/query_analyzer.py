@@ -42,8 +42,14 @@ Work through this reasoning chain internally before writing JSON:
 2. DECOMPOSITION: Is this a compound / multi-part question (e.g. "explain X and compare it to Y",
    "what is X and how is it used in Y")? If so, split it into atomic sub-questions that can each be
    answered from a focused retrieval. If it's a single atomic question, sub_questions = [the question itself].
-3. RETRIEVAL STRATEGY: What clean full-text search queries will surface the right chunks? Prefer specific
-   noun-phrases over the raw sentence. Include one query per sub-question.
+3. RETRIEVAL STRATEGY & TYPO CORRECTION:
+   - Identify and correct any spelling, phonetic, or grammar typos in the student's message (e.g. "low of motions" -> "laws of motion", "photosyntesis" -> "photosynthesis", "derivatve" -> "derivative", "kinametics" -> "kinematics").
+   - Extract the clean, canonical `target_topic` with correct academic spelling and casing (never leave user typos in target_topic).
+   - Generate 2-4 expanded `search_queries` covering:
+     a) The canonical corrected topic name (e.g. "laws of motion")
+     b) Synonyms or related foundational concepts that might appear in the textbook chapter (e.g. "Newton's laws", "inertia", "balanced and unbalanced forces")
+     c) Key entities or formulas (e.g. "force and acceleration", "momentum")
+   - Prefer specific domain noun-phrases over the raw sentence. Include one query per sub-question.
 4. SOURCE & VISUAL NEEDS (Cognitive Evaluation):
    - Evaluate whether a visual substantially improves pedagogical clarity:
      * `requires_image_data`: true if the question refers to a visual figure, diagram, chart, or slide image in the document, or if answering it strongly benefits from visual document context.
