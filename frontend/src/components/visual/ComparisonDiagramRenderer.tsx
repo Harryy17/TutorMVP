@@ -43,15 +43,15 @@ export const ComparisonDiagramRenderer: React.FC<ComparisonDiagramRendererProps>
     <div className="w-full py-3 select-none">
       <div className="rounded-2xl border border-slate-200 bg-white overflow-hidden shadow-2xs">
         {/* Table Header */}
-        <div className="grid grid-cols-12 bg-slate-900 text-white p-3.5 text-xs font-semibold items-center">
-          <div className="col-span-4 flex items-center gap-1.5 text-slate-300">
-            <GitCompare size={13} className="text-blue-400" />
+        <div className="grid grid-cols-12 bg-slate-50 border-b border-slate-200 text-slate-800 p-3.5 text-xs font-semibold items-center">
+          <div className="col-span-4 flex items-center gap-1.5 text-slate-600">
+            <GitCompare size={13} className="text-blue-600" />
             <span>Dimension</span>
           </div>
-          <div className="col-span-4 text-center font-bold text-blue-200 truncate px-1">
+          <div className="col-span-4 text-center font-bold text-blue-700 truncate px-1">
             {conceptAName}
           </div>
-          <div className="col-span-4 text-center font-bold text-emerald-200 truncate px-1">
+          <div className="col-span-4 text-center font-bold text-emerald-700 truncate px-1">
             {conceptBName}
           </div>
         </div>

@@ -45,14 +45,14 @@ class VisualType(str, Enum):
 
 class VisualNode(BaseModel):
     id: str = Field(..., description="Unique alphanumeric identifier (e.g. 'node_1', 'step_1')")
-    label: str = Field(..., max_length=100, description="Concise title or name of the component")
-    description: Optional[str] = Field(None, max_length=250, description="Short summary for the node")
-    details: Optional[str] = Field(None, max_length=600, description="In-depth contextual explanation shown on click")
-    category: Optional[str] = Field(None, max_length=60, description="Layer, tier, or grouping tag")
-    icon_hint: Optional[str] = Field(None, max_length=30, description="Semantic icon hint (e.g. cpu, database, brain, gear, check)")
-    status: Optional[str] = Field(None, max_length=30, description="Badge or state (e.g. input, process, output, key_concept)")
-    value: Optional[str] = Field(None, max_length=80, description="Metric, complexity, formula piece, or quantity")
-    level: Optional[int] = Field(None, ge=0, le=5, description="Depth level for hierarchy or step index")
+    label: str = Field(..., max_length=150, description="Concise title or name of the component")
+    description: Optional[str] = Field(None, max_length=1000, description="Short summary for the node")
+    details: Optional[str] = Field(None, max_length=4000, description="In-depth contextual explanation shown on click")
+    category: Optional[str] = Field(None, max_length=100, description="Layer, tier, or grouping tag")
+    icon_hint: Optional[str] = Field(None, max_length=50, description="Semantic icon hint (e.g. cpu, database, brain, gear, check)")
+    status: Optional[str] = Field(None, max_length=50, description="Badge or state (e.g. input, process, output, key_concept)")
+    value: Optional[str] = Field(None, max_length=120, description="Metric, complexity, formula piece, or quantity")
+    level: Optional[int] = Field(None, ge=0, le=10, description="Depth level for hierarchy or step index")
 
     @field_validator("id", "label", mode="before")
     def sanitize_strings(cls, v: Any) -> str:
@@ -600,9 +600,9 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
 
             nodes.append(VisualNode(
                 id=nid,
-                label=label[:40],
-                description=desc[:150],
-                details=f"Detailed inspection for {label}: {text_item}",
+                label=label[:80],
+                description=desc[:250],
+                details=f"Detailed inspection for {label}: {text_item}"[:800],
                 category=cat,
                 status=status,
                 icon_hint="gear" if i > 0 else "brain",

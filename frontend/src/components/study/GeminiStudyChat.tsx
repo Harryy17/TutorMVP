@@ -88,6 +88,15 @@ const getDisplayChatText = (m: Message): string => {
     cleaned = cleaned.replace(/(?:^|\n)\s*(?:Type|Reply with|Enter)\s+(?:your\s+)?answer[^\n]*/gi, '')
   }
 
+  // Auto-format run-on equation badge lines into clean structured card lines
+  cleaned = cleaned.replace(
+    /(?:^|\n)\s*(?:>\s*)?\[(First equation|Second equation|Third equation|Final velocity|Displacement|First|Second|Third)\]\s*([a-z0-9\s=\+\-\\\/\^\{\}\*\.\_]+?)\s*([A-Z][a-zA-Z\s]+(?:[=×\+\-][a-zA-Z0-9\s\(\)×\+\-]+)+)\s*(Use[^\n]+)/g,
+    (_, badge, mathExpr, wordExpr, useDesc) => {
+      const cleanMath = mathExpr.trim().replace(/^\$\$|\$\$$/g, '')
+      return `\n\n> [${badge}]\n>\n> $$${cleanMath}$$\n>\n> **${wordExpr.trim()}**\n>\n> ${useDesc.trim()}\n\n`
+    }
+  )
+
   cleaned = cleaned.replace(/\n{2,}/g, '\n\n')
   return cleaned.trim()
 }

@@ -330,18 +330,18 @@ export const MathematicalIllustrationRenderer: React.FC<MathematicalIllustration
         )}
 
         {/* Formula Display */}
-        <div className="p-4 sm:p-5 bg-slate-900 text-white flex flex-col items-center justify-center relative">
-          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-300 uppercase tracking-wider mb-1.5">
+        <div className="p-4 sm:p-5 bg-gradient-to-b from-slate-50 to-blue-50/20 border-t border-b border-slate-200 text-slate-900 flex flex-col items-center justify-center relative">
+          <div className="flex items-center gap-1.5 text-xs font-semibold text-blue-600 uppercase tracking-wider mb-1.5">
             <Sigma size={14} /> Key Governing Equation
           </div>
 
           <div
-            className="text-lg sm:text-2xl text-center overflow-x-auto py-1.5 max-w-full text-white"
+            className="text-lg sm:text-2xl text-center overflow-x-auto py-1.5 max-w-full text-slate-900"
             dangerouslySetInnerHTML={{ __html: renderedFormulaHtml }}
           />
 
           {mathData?.intuition && !plotData && (
-            <p className="text-xs text-slate-300 text-center mt-2 max-w-lg leading-relaxed italic">
+            <p className="text-xs text-slate-600 text-center mt-2 max-w-lg leading-relaxed italic">
               "{mathData.intuition}"
             </p>
           )}

@@ -57,30 +57,22 @@ export const HierarchyDiagramRenderer: React.FC<HierarchyDiagramRendererProps> =
                         isSelected
                           ? 'bg-blue-50/90 border-blue-500 ring-2 ring-blue-300'
                           : lIdx === 0
-                          ? 'bg-slate-900 text-white border-slate-800'
+                          ? 'bg-blue-50/70 text-slate-900 border-blue-200'
                           : 'bg-white border-slate-200 hover:border-slate-300'
                       }`}
                     >
                       <div className="flex items-center gap-1.5 mb-1">
                         <GitBranch
                           size={12}
-                          className={lIdx === 0 && !isSelected ? 'text-blue-300' : 'text-blue-600'}
+                          className="text-blue-600"
                         />
-                        <h4
-                          className={`font-semibold text-xs truncate ${
-                            lIdx === 0 && !isSelected ? 'text-white' : 'text-slate-900'
-                          }`}
-                        >
+                        <h4 className="font-semibold text-xs truncate text-slate-900">
                           {node.label}
                         </h4>
                       </div>
 
                       {node.description && (
-                        <p
-                          className={`text-[11px] leading-snug line-clamp-2 ${
-                            lIdx === 0 && !isSelected ? 'text-slate-300' : 'text-slate-600'
-                          }`}
-                        >
+                        <p className="text-[11px] leading-snug line-clamp-2 text-slate-600">
                           {node.description}
                         </p>
                       )}

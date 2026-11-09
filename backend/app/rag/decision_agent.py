@@ -285,7 +285,7 @@ Respond with ONLY this JSON object:
         is_visual_needed = (
             visual_modality in ["generate_image", "generative_diagram"]
             or (query_analysis and query_analysis.get("response_format") == "diagram")
-            or any(w in message.lower() for w in ["diagram", "visualize", "show image", "with an image", "picture of", "schematic", "visual"])
+            or any(w in message.lower() for w in ["diagram", "visualize", "show image", "with an image", "picture of", "schematic", "visual", "figure", "graph", "plot", "curve"])
         )
 
         generated_image_info: Optional[Dict[str, Any]] = None

@@ -1,6 +1,6 @@
 import React from 'react'
 import { motion } from 'framer-motion'
-import { Activity, ArrowRight, Sparkles, CheckCircle2 } from 'lucide-react'
+import { Activity, ArrowRight, Sparkles } from 'lucide-react'
 import type { VisualSpecification, VisualNode } from '../../types/visual'
 
 interface ScientificIllustrationRendererProps {
@@ -31,19 +31,19 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
       : nodes.filter((n) => !effectiveInputs.includes(n) && !effectiveOutputs.includes(n))
 
   return (
-    <div className="w-full py-4 select-none">
-      <div className="p-4 sm:p-5 rounded-2xl bg-slate-900 text-white shadow-xs">
+    <div className="w-full py-3 select-none">
+      <div className="p-4 sm:p-5 rounded-2xl bg-white border border-slate-200 text-slate-900 shadow-xs">
         {/* Scientific Header */}
-        <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-800">
+        <div className="flex items-center justify-between mb-4 pb-2.5 border-b border-slate-100">
           <div className="flex items-center gap-2">
-            <div className="p-1 rounded-md bg-emerald-500/20 text-emerald-400">
+            <div className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 border border-emerald-200/60">
               <Activity size={15} />
             </div>
-            <span className="text-xs font-semibold text-slate-200">
+            <span className="text-xs font-semibold text-slate-800">
               Technical System Mechanism & Reaction Cycle
             </span>
           </div>
-          <span className="text-[10px] uppercase font-mono tracking-wider text-slate-400">
+          <span className="text-[10px] uppercase font-mono tracking-wider text-slate-500 bg-slate-50 border border-slate-200 px-2.5 py-0.5 rounded-full">
             System Boundary
           </span>
         </div>
@@ -51,8 +51,8 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
         {/* 3-Column System Architecture: Inputs -> Internal Mechanisms -> Outputs */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
           {/* 1. System Inputs */}
-          <div className="md:col-span-3 flex flex-col gap-2 p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-300">
+          <div className="md:col-span-3 flex flex-col gap-2 p-3 rounded-xl bg-blue-50/40 border border-blue-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-blue-700">
               Inflow / Substrates
             </span>
             {effectiveInputs.map((node) => (
@@ -62,13 +62,13 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
                 onClick={() => onSelectNode(node)}
                 className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                   activeNodeId === node.id
-                    ? 'bg-blue-600 border-blue-400 text-white'
-                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:border-slate-600'
+                    ? 'bg-blue-600 border-blue-500 text-white shadow-xs'
+                    : 'bg-white border-slate-200/90 text-slate-800 hover:border-blue-300 hover:shadow-xs shadow-2xs'
                 }`}
               >
                 <div className="font-semibold text-xs">{node.label}</div>
                 {node.description && (
-                  <div className="text-[10.5px] opacity-80 mt-0.5 line-clamp-2">
+                  <div className={`text-[10.5px] mt-0.5 line-clamp-2 ${activeNodeId === node.id ? 'text-blue-100' : 'text-slate-500'}`}>
                     {node.description}
                   </div>
                 )}
@@ -77,14 +77,14 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
           </div>
 
           {/* Flow Connector Arrow */}
-          <div className="md:col-span-1 flex items-center justify-center text-slate-500 py-1 md:py-0">
+          <div className="md:col-span-1 flex items-center justify-center text-slate-400 py-1 md:py-0">
             <ArrowRight size={18} className="rotate-90 md:rotate-0" />
           </div>
 
           {/* 2. Internal Mechanism / Chamber */}
-          <div className="md:col-span-4 flex flex-col gap-2 p-3 rounded-xl bg-slate-800/80 border border-emerald-500/30 ring-1 ring-emerald-500/20">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-300 flex items-center gap-1">
-              <Sparkles size={10} /> Core Transformation
+          <div className="md:col-span-4 flex flex-col gap-2 p-3 rounded-xl bg-emerald-50/40 border border-emerald-200/70 ring-1 ring-emerald-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-emerald-700 flex items-center gap-1">
+              <Sparkles size={11} /> Core Transformation
             </span>
             {effectiveMechanisms.map((node) => (
               <motion.div
@@ -93,13 +93,13 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
                 onClick={() => onSelectNode(node)}
                 className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                   activeNodeId === node.id
-                    ? 'bg-emerald-600 border-emerald-400 text-white'
-                    : 'bg-slate-900/90 border-slate-700 text-slate-200 hover:border-emerald-500/50'
+                    ? 'bg-emerald-600 border-emerald-500 text-white shadow-xs'
+                    : 'bg-white border-slate-200/90 text-slate-800 hover:border-emerald-300 hover:shadow-xs shadow-2xs'
                 }`}
               >
                 <div className="font-semibold text-xs">{node.label}</div>
                 {node.description && (
-                  <div className="text-[10.5px] opacity-80 mt-0.5 line-clamp-2">
+                  <div className={`text-[10.5px] mt-0.5 line-clamp-2 ${activeNodeId === node.id ? 'text-emerald-100' : 'text-slate-500'}`}>
                     {node.description}
                   </div>
                 )}
@@ -108,13 +108,13 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
           </div>
 
           {/* Flow Connector Arrow */}
-          <div className="md:col-span-1 flex items-center justify-center text-slate-500 py-1 md:py-0">
+          <div className="md:col-span-1 flex items-center justify-center text-slate-400 py-1 md:py-0">
             <ArrowRight size={18} className="rotate-90 md:rotate-0" />
           </div>
 
           {/* 3. System Outputs */}
-          <div className="md:col-span-3 flex flex-col gap-2 p-3 rounded-xl bg-slate-800/60 border border-slate-700/60">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-300">
+          <div className="md:col-span-3 flex flex-col gap-2 p-3 rounded-xl bg-purple-50/40 border border-purple-100">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-purple-700">
               Outflow / Products
             </span>
             {effectiveOutputs.map((node) => (
@@ -124,13 +124,13 @@ export const ScientificIllustrationRenderer: React.FC<ScientificIllustrationRend
                 onClick={() => onSelectNode(node)}
                 className={`p-2.5 rounded-lg border text-xs cursor-pointer transition-all ${
                   activeNodeId === node.id
-                    ? 'bg-purple-600 border-purple-400 text-white'
-                    : 'bg-slate-800 border-slate-700 text-slate-200 hover:border-slate-600'
+                    ? 'bg-purple-600 border-purple-500 text-white shadow-xs'
+                    : 'bg-white border-slate-200/90 text-slate-800 hover:border-purple-300 hover:shadow-xs shadow-2xs'
                 }`}
               >
                 <div className="font-semibold text-xs">{node.label}</div>
                 {node.description && (
-                  <div className="text-[10.5px] opacity-80 mt-0.5 line-clamp-2">
+                  <div className={`text-[10.5px] mt-0.5 line-clamp-2 ${activeNodeId === node.id ? 'text-purple-100' : 'text-slate-500'}`}>
                     {node.description}
                   </div>
                 )}
