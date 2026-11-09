@@ -1,0 +1,21 @@
+# Rename this file to terraform.tfvars and fill in your values
+
+app_name    = "tutormvp"
+environment = "prod"
+location    = "eastus"
+
+# Free tier is "F1", Basic tier with always-on is "B1"
+app_service_sku = "B1"
+
+# Supabase PostgreSQL connection
+postgres_url = "postgresql://postgres.your-id:your-password@aws-0-eu-central-1.pooler.supabase.com:6543/postgres"
+supabase_url = "https://your-id.supabase.co"
+supabase_key = "your_supabase_anon_or_service_key"
+
+# Azure OpenAI
+azure_openai_endpoint        = "https://your-resource.openai.azure.com/"
+azure_openai_api_key         = "your_azure_openai_api_key"
+azure_openai_deployment_name = "gpt 6.0 sol"
+
+secret_key = "indie-tutor-study-room-secret-key-2026"
+
