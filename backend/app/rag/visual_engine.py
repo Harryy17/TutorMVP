@@ -260,6 +260,8 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
             "draw", "architecture", "show me how", "pipeline", "workflow", "concept map",
             "compare", "difference between", "step by step", "timeline", "formula breakdown",
             "hierarchy", "how does it work", "mechanism", "structure of",
+            "graph", "velocity", "acceleration", "motion", "kinematics", "plot", "curve",
+            "function", "equations of motion",
         ]
         if any(trig in m_lower for trig in explicit_triggers):
             return True
@@ -277,6 +279,10 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
         # 3. Structural clues in the generated reply (e.g. multi-step pipelines or numbered mechanisms)
         if reply_text:
             text_lower = reply_text.lower()
+            if any(k in text_lower for k in ["velocity-time", "velocity time", "distance-time", "schematic graph", "acceleration graph", "equations of motion"]):
+                return True
+            if bool(re.search(r"```[a-zA-Z0-9_-]*\s*\n[^`]*?[\|\^><+/\\-]{3,}", reply_text)):
+                return True
             has_steps = bool(re.search(r"(?:step\s*[1-3]|stage\s*[1-3]|phase\s*[1-3])", text_lower))
             has_multi_components = bool(re.search(r"(?:client|server|database|encoder|decoder|input\s*layer|output\s*layer|backpropagation|forward\s*pass)", text_lower))
             has_comparison_table = "| ---" in reply_text or "vs" in m_lower
@@ -297,6 +303,9 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
 
         if any(k in combined for k in ["compare", "vs", "versus", "difference between", "trade-off", "tradeoff"]):
             return VisualType.COMPARISON
+
+        if any(k in combined for k in ["motion", "velocity", "acceleration", "kinematics", "equations of motion", "speed"]):
+            return VisualType.MATHEMATICAL if any(f in combined for f in ["graph", "formula", "equation", "curve", "$$", "velocity-time", "time"]) else VisualType.SCIENTIFIC
 
         if any(k in combined for k in ["formula", "equation", "derivative", "integral", "theorem", "math", "$$"]):
             return VisualType.MATHEMATICAL
@@ -434,15 +443,30 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
         math_data = None
         if visual_type == VisualType.MATHEMATICAL:
             formula_match = re.search(r"\$\$([^\$]+)\$\$", reply_text) or re.search(r"\$([^\$]+)\$", reply_text)
-            extracted_formula = formula_match.group(0) if formula_match else "$$ f(x) = \\sigma(W^T x + b) $$"
-            math_data = MathIllustrationData(
-                primary_formula=extracted_formula,
-                intuition="Mathematical formulation derived from theoretical principles.",
-                variables=[
+            is_motion = any(k in f"{query} {reply_text}".lower() for k in ["motion", "velocity", "acceleration", "speed", "kinematic", "equations of motion"])
+            if is_motion:
+                extracted_formula = formula_match.group(0) if formula_match else "$$ v = u + at \\quad \\text{and} \\quad s = ut + \\frac{1}{2}at^2 $$"
+                variables = [
+                    MathVariable(symbol="v", name="Final Velocity", description="Velocity reached after accelerating for time t."),
+                    MathVariable(symbol="u", name="Initial Velocity", description="Starting velocity of the object at t = 0."),
+                    MathVariable(symbol="a", name="Uniform Acceleration", description="Constant rate of change of velocity (slope of v-t graph)."),
+                    MathVariable(symbol="t", name="Time Elapsed", description="Duration over which uniform acceleration occurs."),
+                    MathVariable(symbol="s", name="Displacement", description="Total area under the velocity-time graph."),
+                ]
+                intuition = "On a velocity-time graph, uniform acceleration is represented by a straight rising line with slope a, and the area under the line equals total displacement s."
+            else:
+                extracted_formula = formula_match.group(0) if formula_match else "$$ f(x) = \\sigma(W^T x + b) $$"
+                variables = [
                     MathVariable(symbol="W", name="Weights / Parameters", description="Trainable model coefficients governing feature importances."),
                     MathVariable(symbol="x", name="Input State", description="Vector or tensor representing observed domain features."),
                     MathVariable(symbol="b", name="Bias / Offset", description="Scalar shift allowing flexibility in activation threshold."),
                 ]
+                intuition = "Mathematical formulation derived from theoretical principles."
+
+            math_data = MathIllustrationData(
+                primary_formula=extracted_formula,
+                intuition=intuition,
+                variables=variables,
             )
 
         # 3. Type-specific handling: TIMELINE

@@ -107,6 +107,11 @@ RESPONSE GUIDELINES:
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
     clearly labeled section (bold sub-heading per sub-question) rather than blending them into one block.
 - **MATHEMATICAL EQUATIONS & FORMULAS**: Always put core mathematical equations, laws, and algebraic formulas in standalone block math `$$ ... $$` so they automatically render inside a dedicated, highlighted formula box for the student.
+- **NEVER OUTPUT RAW ASCII ART, CODE-BLOCK DRAWINGS, OR TEXT-BASED DIAGRAMS**:
+  - Do NOT draw graphs, diagrams, or flowcharts using code blocks (``` ... ```) or monospace characters (`|`, `/`, `\`, `-`, `^`, `>`, `•`, `_`).
+  - NEVER output Mermaid code or HTML/SVG snippets in text.
+  - The frontend has a dedicated Dynamic Visual Explanation Engine that renders interactive visual components natively.
+  - Write ONLY clean educational prose, formula blocks `$$ ... $$`, and standard Markdown tables.
 - **DO NOT INCLUDE PAGE NUMBERS OR PAGE CITATIONS** (e.g. never write "(p. 50)", "(p. 4)", or "on page 12"). Keep explanations clean and seamless without page citations.
 - **NEVER OUTPUT LITERAL LABELS LIKE "HOOK:", "DEFINITION:", "BREAKDOWN:", "VISUAL:", "CLOSE:" AS TEXT.** Write in natural, clean, beautifully formatted Markdown.
 
@@ -512,6 +517,15 @@ Respond with ONLY this JSON object:
         reply = re.sub(r"\\le\s*ft\b", r"\\left", reply)
         reply = re.sub(r"\\righ\s*t\b", r"\\right", reply)
         reply = re.sub(r"\\sq\s*rt\b", r"\\sqrt", reply)
+
+        # Strip out any rogue ASCII diagrams or text-art graphs in code blocks
+        ascii_codeblock_pattern = r"```[a-zA-Z0-9_-]*\s*\n([^`]*?[\|\^><+/\\-]{3,}[^`]*?)\n```"
+        had_ascii = bool(re.search(ascii_codeblock_pattern, reply))
+        if had_ascii:
+            reply = re.sub(ascii_codeblock_pattern, "", reply).strip()
+            if query_analysis:
+                query_analysis["response_format"] = "diagram"
+
         reply = re.sub(r"\n{3,}", "\n\n", reply).strip()
 
         # Embed generated visual diagram if present and not yet referenced
