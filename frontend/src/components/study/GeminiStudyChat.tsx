@@ -119,11 +119,11 @@ const chatMarkdownComponents = {
     return <hr className="my-3 border-t border-slate-100" />
   },
   p({ children, ...props }: any) {
-    // Detect pill badge patterns like [First equation], [Second equation], [Third equation]
+    // Detect pill badge patterns like [First equation], [First Law: Law of Inertia], [Second equation]
     if (children && (typeof children === 'string' || (Array.isArray(children) && typeof children[0] === 'string'))) {
       const firstChild = Array.isArray(children) ? children[0] : children
       if (typeof firstChild === 'string') {
-        const badgeMatch = firstChild.match(/^\s*\[(First|Second|Third|Fourth|Final)?\s*(equation|law|principle|formula|step)\]/i)
+        const badgeMatch = firstChild.match(/^\s*\[(First|Second|Third|Fourth|Final)?\s*(equation|law|principle|formula|step)(?::\s*([^\]]+))?\]/i)
         if (badgeMatch) {
           const type = (badgeMatch[1] || '').toLowerCase()
           const colorClasses =
@@ -133,14 +133,15 @@ const chatMarkdownComponents = {
               ? 'bg-purple-50 text-purple-700 border-purple-200/70'
               : 'bg-blue-50 text-blue-600 border-blue-200/70'
 
-          const badgeLabel = `${badgeMatch[1] || ''} ${badgeMatch[2]}`.trim()
+          const rawLabel = `${badgeMatch[1] || ''} ${badgeMatch[2]}${badgeMatch[3] ? ': ' + badgeMatch[3].trim() : ''}`.trim()
+          const badgeLabel = rawLabel.charAt(0).toUpperCase() + rawLabel.slice(1)
           const remainingFirst = firstChild.replace(badgeMatch[0], '').trim()
           const rest = Array.isArray(children) ? children.slice(1) : []
 
           return (
             <div className="my-2.5">
               <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-semibold border ${colorClasses}`}>
-                {badgeLabel.charAt(0).toUpperCase() + badgeLabel.slice(1)}
+                {badgeLabel}
               </span>
               {(remainingFirst || rest.length > 0) && (
                 <div className="mt-1 leading-relaxed">
