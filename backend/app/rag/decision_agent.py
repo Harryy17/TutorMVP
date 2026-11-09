@@ -106,7 +106,14 @@ RESPONSE GUIDELINES:
        `.md` file as-is.
   - If the plan flags multiple sub_questions (a compound question), answer each sub-question in its own
     clearly labeled section (bold sub-heading per sub-question) rather than blending them into one block.
-- **MATHEMATICAL EQUATIONS & FORMULAS**: Always put core mathematical equations, laws, and algebraic formulas in standalone block math `$$ ... $$` so they automatically render inside a dedicated, highlighted formula box for the student.
+- **MATHEMATICAL EQUATIONS, FORMULAS & DERIVATIONS**:
+  - Always put core mathematical equations, laws, and algebraic progressions in standalone display math `$$ ... $$` so they automatically render inside dedicated formula blocks.
+  - When explaining or deriving mathematical or physics equations (such as equations of motion, kinetic energy, quadratic formula, or proofs):
+    1. Introduce each derivation with a clean bold heading (e.g. `**Derivation of the first equation**` or `**Derivation of the second equation**`).
+    2. Structure the derivation step-by-step with clean transitional phrases on separate lines (e.g. "We know:", "Therefore:", "Rearranging:", "So,").
+    3. Place each algebraic intermediate step in a standalone centered `$$ ... $$` block (e.g. `$$a = \frac{v - u}{t}$$`).
+    4. Conclude each derivation by highlighting the final derived equation inside a LaTeX box: `$$\boxed{v = u + at}$$` or `$$\boxed{s = ut + \frac{1}{2}at^2}$$`.
+  - State the physical interpretation of graph slope and area under the curve explicitly (e.g. *"The slope of this graph represents acceleration, and the area underneath it represents displacement."*).
 - **NEVER OUTPUT RAW ASCII ART, CODE-BLOCK DRAWINGS, OR TEXT-BASED DIAGRAMS**:
   - Do NOT draw graphs, diagrams, or flowcharts using code blocks (``` ... ```) or monospace characters (`|`, `/`, `\`, `-`, `^`, `>`, `•`, `_`).
   - NEVER output Mermaid code or HTML/SVG snippets in text.

@@ -451,9 +451,10 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
                     MathVariable(symbol="u", name="Initial Velocity", description="Starting velocity of the object at t = 0."),
                     MathVariable(symbol="a", name="Uniform Acceleration", description="Constant rate of change of velocity (slope of v-t graph)."),
                     MathVariable(symbol="t", name="Time Elapsed", description="Duration over which uniform acceleration occurs."),
-                    MathVariable(symbol="s", name="Displacement", description="Total area under the velocity-time graph."),
+                    MathVariable(symbol="s", name="Displacement", description="Total area under the velocity-time graph (trapezoid)."),
                 ]
-                intuition = "On a velocity-time graph, uniform acceleration is represented by a straight rising line with slope a, and the area under the line equals total displacement s."
+                intuition = "The slope of this graph represents acceleration, and the area underneath it represents displacement."
+                graph_type = "velocity_time"
             else:
                 extracted_formula = formula_match.group(0) if formula_match else "$$ f(x) = \\sigma(W^T x + b) $$"
                 variables = [
@@ -462,11 +463,13 @@ Respond with ONLY this JSON object. No intro, no markdown code fence."""
                     MathVariable(symbol="b", name="Bias / Offset", description="Scalar shift allowing flexibility in activation threshold."),
                 ]
                 intuition = "Mathematical formulation derived from theoretical principles."
+                graph_type = "function"
 
             math_data = MathIllustrationData(
                 primary_formula=extracted_formula,
                 intuition=intuition,
                 variables=variables,
+                graph_type=graph_type,
             )
 
         # 3. Type-specific handling: TIMELINE
