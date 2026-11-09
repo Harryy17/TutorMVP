@@ -27,6 +27,8 @@ from typing import List, Dict, Any, Optional, Tuple
 from dataclasses import dataclass, field
 
 import pypdf
+import logging
+logging.getLogger("pypdf").setLevel(logging.ERROR)
 import pdfplumber
 from PIL import Image
 
