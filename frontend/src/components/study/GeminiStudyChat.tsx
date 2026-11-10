@@ -582,16 +582,15 @@ export default function GeminiStudyChat({
         title: res.data?.title,
       }).catch(() => { })
 
-    } catch {
+    } catch (err: any) {
+      console.error('[Upload] Error uploading material:', err)
       const fallbackSessionId = sessionId || `session_${Date.now()}`
       setSessionId(fallbackSessionId)
       if (onSessionChange) onSessionChange(fallbackSessionId)
-      const fallbackTopics: TopicItem[] = [
-        { id: 'topic_1', title: 'Decision Trees & Random Forests', summary: 'Tree-based recursive partitioning and ensemble classification.', difficulty: 'Beginner', key_concepts: ['Entropy', 'Information Gain'], estimated_study_time: '12-15 mins' },
-        { id: 'topic_2', title: 'Support Vector Machines', summary: 'Maximum margin hyperplanes and kernel tricks for non-linear boundaries.', difficulty: 'Intermediate', key_concepts: ['Kernel Trick', 'Soft Margin'], estimated_study_time: '15-18 mins' },
-        { id: 'topic_3', title: 'Logistic & Linear Regression', summary: 'Parametric modeling, gradient descent optimization, and cost functions.', difficulty: 'Beginner', key_concepts: ['Sigmoid', 'Loss Function'], estimated_study_time: '12-15 mins' },
-      ]
-      setExtractedTopics(fallbackTopics)
+      
+      const errorMsg = err?.response?.status === 413 
+        ? "File is too large. Please upload a file smaller than 50MB." 
+        : (err?.response?.data?.detail || err?.message || "Failed to process and analyze the uploaded file. Please try uploading again.");
 
       const fallbackMsgs = [
         ...messages,
@@ -599,17 +598,16 @@ export default function GeminiStudyChat({
         {
           id: analyzingId,
           role: 'assistant' as const,
-          text: `### Extracted Curriculum Roadmap for **${currentSubject}**\n\nI have extracted **${fallbackTopics.length} core learning modules**. You can explore any topic below:`,
+          text: `### ⚠️ Upload Processing Error\n\nI was unable to analyze **${file.name}**.\n\n> **Reason:** ${errorMsg}\n\nPlease try uploading the file again or ask any question directly in the chat!`,
           isAnalyzing: false,
-          topics: fallbackTopics,
         }
       ]
       setMessages(fallbackMsgs)
-      setStep('topics_ready')
+      setStep('conversing')
 
       studyApi.saveSessionState(fallbackSessionId, {
         messages: fallbackMsgs,
-        topics: fallbackTopics,
+        topics: [],
         subject: currentSubject,
       }).catch(() => { })
     } finally {

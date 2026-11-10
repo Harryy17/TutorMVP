@@ -17,7 +17,8 @@ def _get_active_env() -> Dict[str, str]:
     vals = {}
     if env_path.exists():
         vals = dotenv_values(env_path)
-        raw_dep = (vals.get("AZURE_OPENAI_DEPLOYMENT_NAME") or os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME") or "gpt-6-sol").strip()
+    
+    raw_dep = (vals.get("AZURE_OPENAI_DEPLOYMENT_NAME") or os.environ.get("AZURE_OPENAI_DEPLOYMENT_NAME") or "gpt-6-sol").strip()
     # Normalize model deployment name
     if any(alias in raw_dep.lower() for alias in ["gpt 6.0 sol", "gpt-6.0-sol", "gpt 6 sol", "gpt-6-sol", "gpt6"]):
         deployment = "gpt-6-sol"
